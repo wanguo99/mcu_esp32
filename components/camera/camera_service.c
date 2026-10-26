@@ -22,7 +22,10 @@ static atomic_int s_framesize = FRAMESIZE_INVALID;
 static bool s_recording;
 static bool s_stream_claimed;
 static bool s_stream_stop_requested;
-static uint32_t s_frames_in_use;
+// Includes both borrowed frames and callers waiting inside esp_camera_fb_get().
+// Never hold s_frame_lock while waiting for a frame: returners must be able to run.
+static uint32_t s_frame_users;
+static bool s_frames_paused;
 static char s_sensor_name[24] = "unavailable";
 
 static camera_config_t s_camera_config = {
@@ -93,7 +96,8 @@ esp_err_t camera_service_init(void)
     s_recording = false;
     s_stream_claimed = false;
     s_stream_stop_requested = false;
-    s_frames_in_use = 0;
+    s_frame_users = 0;
+    s_frames_paused = false;
     strlcpy(s_sensor_name, "disabled", sizeof(s_sensor_name));
     ESP_LOGI(TAG, "Camera service ready; camera is disabled until explicitly enabled");
     return ESP_OK;
@@ -167,12 +171,12 @@ static esp_err_t set_enabled_serialized(bool enabled)
 
     for (int attempt = 0; attempt < 240; ++attempt) {
         xSemaphoreTake(s_frame_lock, portMAX_DELAY);
-        uint32_t frames_in_use = s_frames_in_use;
+        uint32_t frame_users = s_frame_users;
         xSemaphoreGive(s_frame_lock);
         xSemaphoreTake(s_lock, portMAX_DELAY);
         bool stream_claimed = s_stream_claimed;
         xSemaphoreGive(s_lock);
-        if (frames_in_use == 0 && !stream_claimed) {
+        if (frame_users == 0 && !stream_claimed) {
             break;
         }
         vTaskDelay(pdMS_TO_TICKS(50));
@@ -181,7 +185,7 @@ static esp_err_t set_enabled_serialized(bool enabled)
     xSemaphoreTake(s_lock, portMAX_DELAY);
     xSemaphoreTake(s_frame_lock, portMAX_DELAY);
     sensor_t *sensor = esp_camera_sensor_get();
-    if (s_frames_in_use == 0 && !s_stream_claimed && sensor && sensor->id.PID == OV3660_PID) {
+    if (s_frame_users == 0 && !s_stream_claimed && sensor && sensor->id.PID == OV3660_PID) {
         // Put OV3660 into software power-down before SCCB and XCLK are released.
         if (sensor->set_reg(sensor, OV3660_SYSTEM_CONTROL0, OV3660_SOFTWARE_POWER_DOWN,
                             OV3660_SOFTWARE_POWER_DOWN) != 0) {
@@ -189,7 +193,7 @@ static esp_err_t set_enabled_serialized(bool enabled)
         }
     }
     esp_err_t result =
-        (s_frames_in_use == 0 && !s_stream_claimed) ? esp_camera_deinit() : ESP_ERR_TIMEOUT;
+        (s_frame_users == 0 && !s_stream_claimed) ? esp_camera_deinit() : ESP_ERR_TIMEOUT;
     if (result == ESP_OK) {
         atomic_store(&s_framesize, FRAMESIZE_INVALID);
         strlcpy(s_sensor_name, "disabled", sizeof(s_sensor_name));
@@ -241,15 +245,20 @@ camera_fb_t *camera_service_get_frame(void)
     if (!s_lock || !s_frame_lock || xSemaphoreTake(s_frame_lock, portMAX_DELAY) != pdTRUE) {
         return NULL;
     }
-    if (!atomic_load(&s_ready)) {
+    if (!atomic_load(&s_ready) || s_frames_paused) {
         xSemaphoreGive(s_frame_lock);
         return NULL;
     }
-    camera_fb_t *frame = esp_camera_fb_get();
-    if (frame) {
-        ++s_frames_in_use;
-    }
+    // Reserve the driver lifetime before releasing the mutex, including when
+    // the driver's frame queue is empty. Shutdown waits for this reservation.
+    ++s_frame_users;
     xSemaphoreGive(s_frame_lock);
+    camera_fb_t *frame = esp_camera_fb_get();
+    if (!frame) {
+        xSemaphoreTake(s_frame_lock, portMAX_DELAY);
+        --s_frame_users;
+        xSemaphoreGive(s_frame_lock);
+    }
     return frame;
 }
 
@@ -258,14 +267,14 @@ void camera_service_return_frame(camera_fb_t *frame)
     if (frame) {
         xSemaphoreTake(s_frame_lock, portMAX_DELAY);
         esp_camera_fb_return(frame);
-        if (s_frames_in_use > 0) {
-            --s_frames_in_use;
+        if (s_frame_users > 0) {
+            --s_frame_users;
         }
         xSemaphoreGive(s_frame_lock);
     }
 }
 
-esp_err_t camera_service_set_framesize(framesize_t framesize)
+static esp_err_t set_framesize_serialized(framesize_t framesize)
 {
     if (!s_lock || !s_frame_lock) {
         return ESP_ERR_INVALID_STATE;
@@ -279,12 +288,18 @@ esp_err_t camera_service_set_framesize(framesize_t framesize)
         xSemaphoreGive(s_lock);
         return ESP_ERR_INVALID_STATE;
     }
+    xSemaphoreTake(s_frame_lock, portMAX_DELAY);
+    s_frames_paused = true;
     s_stream_stop_requested = s_stream_claimed;
+    xSemaphoreGive(s_frame_lock);
     xSemaphoreGive(s_lock);
 
     if (!camera_service_wait_for_stream_idle(6000)) {
         xSemaphoreTake(s_lock, portMAX_DELAY);
+        xSemaphoreTake(s_frame_lock, portMAX_DELAY);
+        s_frames_paused = false;
         s_stream_stop_requested = false;
+        xSemaphoreGive(s_frame_lock);
         xSemaphoreGive(s_lock);
         return ESP_ERR_TIMEOUT;
     }
@@ -298,9 +313,19 @@ esp_err_t camera_service_set_framesize(framesize_t framesize)
     } else {
         atomic_store(&s_framesize, framesize);
     }
+    s_frames_paused = false;
     s_stream_stop_requested = false;
     xSemaphoreGive(s_frame_lock);
     xSemaphoreGive(s_lock);
+    return result;
+}
+
+esp_err_t camera_service_set_framesize(framesize_t framesize)
+{
+    if (!s_control_lock) return ESP_ERR_INVALID_STATE;
+    xSemaphoreTake(s_control_lock, portMAX_DELAY);
+    esp_err_t result = set_framesize_serialized(framesize);
+    xSemaphoreGive(s_control_lock);
     return result;
 }
 
@@ -310,10 +335,13 @@ esp_err_t camera_service_begin_recording(void)
         return ESP_ERR_INVALID_STATE;
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    esp_err_t result = !atomic_load(&s_ready) || s_recording ? ESP_ERR_INVALID_STATE : ESP_OK;
+    xSemaphoreTake(s_frame_lock, portMAX_DELAY);
+    esp_err_t result = !atomic_load(&s_ready) || s_frames_paused || s_recording
+                           ? ESP_ERR_INVALID_STATE : ESP_OK;
     if (result == ESP_OK) {
         s_recording = true;
     }
+    xSemaphoreGive(s_frame_lock);
     xSemaphoreGive(s_lock);
     return result;
 }
@@ -334,11 +362,13 @@ bool camera_service_claim_stream(void)
         return false;
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    bool claimed = atomic_load(&s_ready) && !s_stream_claimed;
+    xSemaphoreTake(s_frame_lock, portMAX_DELAY);
+    bool claimed = atomic_load(&s_ready) && !s_frames_paused && !s_stream_claimed;
     if (claimed) {
         s_stream_claimed = true;
         s_stream_stop_requested = false;
     }
+    xSemaphoreGive(s_frame_lock);
     xSemaphoreGive(s_lock);
     return claimed;
 }
@@ -383,9 +413,9 @@ bool camera_service_wait_for_stream_idle(uint32_t timeout_ms)
         bool stream_claimed = s_stream_claimed;
         xSemaphoreGive(s_lock);
         xSemaphoreTake(s_frame_lock, portMAX_DELAY);
-        bool frames_in_use = s_frames_in_use != 0;
+        bool frame_users = s_frame_users != 0;
         xSemaphoreGive(s_frame_lock);
-        if (!stream_claimed && !frames_in_use) {
+        if (!stream_claimed && !frame_users) {
             return true;
         }
         if ((int32_t)(xTaskGetTickCount() - deadline) >= 0) {

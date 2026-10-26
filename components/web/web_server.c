@@ -25,6 +25,14 @@ extern const uint8_t home_end[] asm("_binary_web_home_html_end");
 static esp_err_t home_handler(httpd_req_t *req)
 { return web_send_asset(req, home_start, home_end, "text/html; charset=utf-8"); }
 
+static esp_err_t favicon_handler(httpd_req_t *req)
+{
+    web_set_common_headers(req);
+    httpd_resp_set_status(req, "204 No Content");
+    httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=86400");
+    return httpd_resp_send(req, NULL, 0);
+}
+
 static esp_err_t modules_handler(httpd_req_t *req)
 {
     cJSON *list = cJSON_CreateArray();
@@ -118,6 +126,7 @@ esp_err_t web_server_start(web_shutdown_callback_t shutdown)
     if (result != ESP_OK) return result;
     const httpd_uri_t routes[] = {
         {.uri="/", .method=HTTP_GET, .handler=home_handler},
+        {.uri="/favicon.ico", .method=HTTP_GET, .handler=favicon_handler},
         {.uri="/api/status", .method=HTTP_GET, .handler=status_handler},
         {.uri="/api/modules", .method=HTTP_GET, .handler=modules_handler},
         {.uri="/api/system/restart", .method=HTTP_POST, .handler=restart_handler},

@@ -12,6 +12,8 @@ bool camera_service_is_enabled(void);
 bool camera_service_is_ready(void);
 const char *camera_service_sensor_name(void);
 framesize_t camera_service_get_framesize(void);
+// May wait for a driver frame; shutdown/reconfiguration drains pending getters
+// as well as borrowed frames. Every non-NULL frame must be returned exactly once.
 camera_fb_t *camera_service_get_frame(void);
 void camera_service_return_frame(camera_fb_t *frame);
 esp_err_t camera_service_set_framesize(framesize_t framesize);

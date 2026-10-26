@@ -1,7 +1,9 @@
 #include "storage_service.h"
 #include "board.h"
 #include "app_config.h"
+#include "photo_file.h"
 #include <ctype.h>
+#include <errno.h>
 #include <dirent.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -210,6 +212,21 @@ static esp_err_t mount_sd_card(void)
     return result;
 }
 
+static void report_photo_error(const char *operation, int error)
+{
+    if (!error) error = EIO;
+    ESP_LOGE(TAG, "Photo %s failed: %s (errno=%d)", operation, strerror(error), error);
+    if (error == EIO || error == ENODEV || error == ENXIO) {
+        unmount_sd_card_locked();
+    } else {
+        // Full or read-only media remains available for listing/downloads and,
+        // where possible, deletion. Mount probing cannot recover a full card.
+        uint64_t total = 0, free_bytes = 0;
+        esp_vfs_fat_info(APP_SD_MOUNT_POINT, &total, &free_bytes);
+        update_sd_status(s_sd_mounted, total, free_bytes, strerror(error));
+    }
+}
+
 static esp_err_t save_photo_locked(const uint8_t *data, size_t length, char *path, size_t path_size)
 {
     if (!data || length == 0 || !path || path_size == 0) {
@@ -223,46 +240,34 @@ static esp_err_t save_photo_locked(const uint8_t *data, size_t length, char *pat
 
     uint32_t sequence = next_photo_sequence_locked();
     char candidate[96];
-    FILE *file = NULL;
-    bool path_available = false;
-    for (unsigned int attempt = 0; attempt < 100000 && sequence != 0; ++attempt) {
-        int path_length = snprintf(candidate, sizeof(candidate), APP_SD_MOUNT_POINT "/photo_%05" PRIu32 ".jpg", sequence);
-        if (path_length < 0 || (size_t)path_length >= sizeof(candidate) || (size_t)path_length >= path_size)
-            return ESP_ERR_INVALID_ARG;
-        FILE *existing = fopen(candidate, "rb");
-        if (existing) {
-            fclose(existing);
-            ++sequence;
-            continue;
-        }
-        file = fopen(candidate, "wb");
-        if (file) {
-            path_available = true;
-            if (sequence < UINT32_MAX) {
-                s_photo_sequence = sequence + 1;
-            }
-            break;
-        }
-        ++sequence;
-    }
-    if (!path_available || !file) {
-        unmount_sd_card_locked();
+    size_t candidate_size = path_size < sizeof(candidate) ? path_size : sizeof(candidate);
+    FILE *file = photo_file_create(APP_SD_MOUNT_POINT, &sequence, candidate, candidate_size);
+    if (!file) {
+        int error = errno;
+        if (error == EINVAL || error == ENAMETOOLONG) return ESP_ERR_INVALID_ARG;
+        report_photo_error("creation", error);
         return ESP_FAIL;
     }
+    if (sequence < UINT32_MAX) s_photo_sequence = sequence + 1;
 
+    errno = 0;
     bool written = fwrite(data, 1, length, file) == length;
+    int error = written ? 0 : (errno ? errno : EIO);
     if (written && fflush(file) != 0) {
+        error = errno ? errno : EIO;
         written = false;
     }
     if (written && fsync(fileno(file)) != 0) {
+        error = errno ? errno : EIO;
         written = false;
     }
-    if (fclose(file) != 0) {
+    if (fclose(file) != 0 && written) {
+        error = errno ? errno : EIO;
         written = false;
     }
     if (!written) {
         remove(candidate);
-        unmount_sd_card_locked();
+        report_photo_error("write", error);
         return ESP_FAIL;
     }
 
