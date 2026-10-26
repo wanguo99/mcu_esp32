@@ -1,0 +1,14 @@
+menu "Network configuration"
+
+config CAM_WIFI_AP_SSID
+    string "Access point SSID"
+    default "ESP32-Device"
+
+config CAM_WIFI_AP_PASSWORD
+    string "Access point password"
+    default "esp32setup"
+    help
+        Leave empty for an open access point, or configure an 8 to 63
+        character password to enable WPA2-PSK for production deployments.
+
+endmenu

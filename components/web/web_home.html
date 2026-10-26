@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>设备控制台</title><style>
+body{font:16px system-ui;max-width:800px;margin:48px auto;padding:0 24px;background:#f3f5f7;color:#20303c}
+section{background:white;border-radius:12px;padding:24px;margin:20px 0}a{color:#1166a8}li{margin:12px 0}
+</style><h1 id="name">设备控制台</h1><section><p id="status">正在连接设备…</p></section>
+<section><h2>功能模块</h2><ul id="pages"></ul><p id="modules"></p></section><script>
+(async()=>{try{const status=await fetch('/api/status').then(r=>r.json());
+document.getElementById('name').textContent=status.name;
+document.getElementById('status').textContent=`${status.board} · ${status.ip} · 运行 ${status.uptime_seconds} 秒`;
+document.getElementById('modules').textContent='已选择：'+Object.entries(status.modules).filter(([,v])=>v).map(([k])=>k).join('、');
+const pages=await fetch('/api/modules').then(r=>r.json());for(const page of pages){const li=document.createElement('li');const a=document.createElement('a');a.textContent=page.name;a.href=page.href;li.append(a);document.getElementById('pages').append(li);}
+}catch(e){document.getElementById('status').textContent='设备状态读取失败';}})();
+</script></html>

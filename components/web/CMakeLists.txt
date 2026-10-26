@@ -1,0 +1,1 @@
+idf_component_register(SRCS "web_server.c" "web_response.c" INCLUDE_DIRS "include" EMBED_TXTFILES "web_home.html" REQUIRES app_config board network esp_http_server esp_app_format esp_timer espressif__cjson)

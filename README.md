@@ -1,104 +1,111 @@
-# 北斗卫星桌面控制器
+# ESP32 可组合固件工程
 
-基于 ESP32-S3-N16R8、ESP-IDF 和 FreeRTOS。需求与后续开发顺序见 [docs/requirements-v1.md](docs/requirements-v1.md)，开发板资料入口见 [docs/README.md](docs/README.md)。
+基于 ESP-IDF v6.1 和 ESP32-S3，将共享功能、板卡配置和应用组合分别维护。当前提供北斗卫星基础工程与 XIAO 摄像头监控应用。
+
+| 应用 | 默认板卡 | 默认功能 |
+| --- | --- | --- |
+| `satellite` | `YD_ESP32_S3`，16 MB Flash / 8 MB PSRAM | NVS、芯片和内存自检；每 5 秒输出状态 |
+| `camera_monitor` | `XIAO_ESP32_S3_SENSE`，8 MB Flash / 8 MB PSRAM | AP 网络、网页、摄像头、拍照存卡、分段录像、文件管理 |
+
+模块选择、接口及扩展方式见 [模块使用说明](docs/modules.md)，卫星业务需求见 [需求文档](docs/requirements-v1.md)，开发板资料见 [资料索引](docs/README.md)。
+
+## 目录
+
+```text
+apps/          # 各应用的入口、默认板卡和产品设置
+boards/        # 各板卡的引脚、存储器默认值和分区表
+components/    # 可复用功能组件及网页适配组件
+cmake/         # 模块选择、依赖展开和板卡检查
+config/        # 共享 ESP-IDF 默认值
+build/         # 按应用、板卡及模块组合隔离的构建结果，Git 忽略
+docs/          # 需求、模块文档和板卡资料
+tools/         # SDK 安装、环境激活和应用构建入口
+tests/         # 无需开发板的监控网页行为测试
+```
 
 ## 开发环境
 
-固定使用 **ESP-IDF v6.1**，目标为 `esp32s3`。SDK 和工具链放在 HOME 下的 `EPS` 目录，多个项目可以共用：
-
-```text
-~/EPS/
-├── esp-idf/       # v6.1 源码，包含子模块
-├── tools/        # 编译器、GDB、OpenOCD、Python 虚拟环境
-├── cache/        # pip 等缓存
-└── export.sh     # Bash / Zsh 通用激活入口
-```
-
-在仓库根目录安装或补齐环境：
+统一使用 **ESP-IDF v6.1**。SDK 和工具链共用 `~/EPS`，安装或补齐环境：
 
 ```bash
 bash tools/setup.sh
 ```
 
-脚本使用乐鑫官方支持的 `install.sh` 安装方式，只安装 ESP32-S3 所需工具。依赖 Git、Python 3.10+、CMake 3.22+ 和 Ninja。最小 Debian 环境缺少 `ensurepip` 时，会通过现有 pip 为独立 Python 环境引导安装 pip，不修改系统 Python。下载的工具由 ESP-IDF 安装器校验。
+依赖 Git、Python 3.10+、CMake 3.22+ 和 Ninja。环境脚本支持 Bash / Zsh；可通过 `ESP_SDK_ROOT` 改变 SDK 位置。
 
-默认位置为 `$HOME/EPS`；如需其他位置，在安装和激活前设置 `ESP_SDK_ROOT`。脚本会检查 SDK 版本，保留已有的其他版本或修改过的源码，不自动切换它们。
+## 编译和模块选择
 
-## 编译
-
-在项目根目录运行：
-
-```bash
-source tools/export.sh
-idf.py build
-```
-
-也可以直接运行封装命令，无需提前激活终端：
+在仓库根目录执行，默认构建卫星基础应用：
 
 ```bash
 bash tools/idf.sh build
-bash tools/idf.sh size
-bash tools/idf.sh menuconfig
+bash tools/idf.sh --app camera_monitor build
 ```
 
-其他项目可运行 `source ~/EPS/export.sh` 共用此 SDK，再进入自己的项目目录执行 `idf.py`。工程默认目标已经是 `esp32s3`，首次编译无需额外运行 `set-target`。
-
-## 板卡默认配置
-
-`sdkconfig.defaults` 按 **ESP32-S3-WROOM-1 / WROOM-1U N16R8** 配置：16MB Quad Flash、8MB Octal PSRAM，时钟均为 80MHz，Flash 使用 DIO。若实际模组为 WROOM-2 或带 `V` 后缀的其他型号，应先按模组规格确认 Flash 模式。
-
-YD-ESP32-S3 的 USB 接口、完整排针表、GPIO 限制、供电和尺寸见 [开发板使用说明](docs/YD_ESP32_S3/README.md)。
-
-| 分区 | 大小 | 用途 |
-| --- | --- | --- |
-| nvs | 24 KiB | 后续保存配网和设备配置 |
-| otadata | 8 KiB | OTA 启动选择数据 |
-| phy_init | 4 KiB | 预留 PHY 数据 |
-| ota_0 | 6 MiB | 默认应用槽 |
-| ota_1 | 6 MiB | 后续 OTA 应用槽 |
-| storage | 3968 KiB | 预留 SPIFFS 数据区 |
-
-分区覆盖至 16MB 边界。OTA 升级流程、回滚自检和文件系统挂载尚未实现；当前只是预留空间。`sdkconfig` 和 `build/` 是本地生成文件，默认配置与分区表纳入版本管理。
-
-## 烧录与串口
-
-接上开发板后，先确定端口：
+显式选择模块，例如只保留实时画面和拍照，不包含 SD 卡与录像：
 
 ```bash
-ls /dev/serial/by-id/
+bash tools/idf.sh --app camera_monitor --modules network,web,camera build
 ```
 
-将下面的 `/dev/ttyACM0` 替换成实际端口（USB 转串口板可能是 `/dev/ttyUSB0`）：
+拍照存卡但不带录像：
 
 ```bash
+bash tools/idf.sh --app camera_monitor --modules network,web,camera,storage build
+```
+
+卫星应用选择网页与舵机驱动：
+
+```bash
+bash tools/idf.sh --app satellite --modules network,web,servo build
+```
+
+`servo` 提供驱动 API，选择它不会自动产生 PWM；需要应用传入实物引脚与校准参数并调用接口。雷达扫描、展翼调度和电源采样业务尚未实现。
+
+应用选择与板卡选择相互独立。例如可使用 XIAO 为卫星应用编入摄像头能力：
+
+```bash
+bash tools/idf.sh --app satellite --board XIAO_ESP32_S3_SENSE --modules network,web,camera,servo build
+```
+
+YD 默认板卡没有摄像头和 SD 接线配置，选择对应模块会在配置阶段报错；使用外接摄像头时，先增加匹配实际接线的板卡配置。
+
+`--app`、`--board`、`--modules` 放在 IDF 参数之前；后续可使用 `size`、`menuconfig`、`flash`、`monitor` 等命令。省略 `--modules` 使用应用默认组合，`--modules ""` 仅构建基础服务。默认和自选组合分别使用独立目录，例如：
+
+```text
+build/satellite/YD_ESP32_S3/
+build/camera_monitor/XIAO_ESP32_S3_SENSE/
+build/camera_monitor/XIAO_ESP32_S3_SENSE-network_web_camera/
+```
+
+生成的 `sdkconfig`、依赖锁文件和固件位于相应构建目录；第三方源码缓存位于各应用的 `managed_components/`，均由 Git 忽略。直接依赖版本固定在组件的 `idf_component.yml` 中。
+
+## 烧录和串口
+
+先查询端口，再为同一应用及模块组合烧录或查看日志：
+
+```bash
+ls -l /dev/serial/by-id/
 bash tools/idf.sh -p /dev/ttyACM0 flash monitor
+bash tools/idf.sh --app camera_monitor -p /dev/ttyACM0 flash monitor
 ```
 
-串口监视器波特率为 115200，按 `Ctrl+]` 退出。默认通过 UART0 输出日志，同时启用原生 USB Serial/JTAG 辅助控制台。首次不能进入下载模式时，可按住 BOOT，再点按 RESET 后松开 BOOT。
+自选组合的烧录命令也需携带相同的 `--modules`。监视波特率为 115200，按 `Ctrl+]` 退出。默认 UART0 主控制台加原生 USB Serial/JTAG 辅助输出。手动进入下载模式：按住 BOOT，点按 RST，再松开 BOOT。
 
-如果端口存在但提示权限不足，先用 `ls -l /dev/ttyACM0` 检查所属组；Debian 常用 `dialout` 组，需要让系统管理员授予相应访问权限。
+## 监控应用
 
-## 当前固件行为
+默认启动 AP：SSID `CMCC-ESP`，密码 `66668888`；可通过 `menuconfig` 修改网络配置。连接后打开 `http://192.168.4.1/`，点击“摄像头监控”进入 `/camera/`。
 
-- 初始化 NVS；异常时输出错误，不自动擦除已有数据。
-- 输出项目版本、ESP-IDF 版本、芯片核心数和 Flash / PSRAM 实际容量。
-- 每 5 秒输出运行时间及可用内部内存、PSRAM。
-- 尚未配置舵机 GPIO、ADC、Wi-Fi 或 Web 服务。
+摄像头默认关闭。开启后提供 MJPEG 实时画面和拍照；选中存储模块时支持照片保存和文件管理，选中录像模块时支持分段 MJPEG AVI 录像。当前默认 SVGA、单路预览、录像约 5 FPS。摄像头关闭请求在后台完成录像收尾与视频流退出，再释放摄像头驱动和帧缓冲；网络与网页保留，便于再次开启。
 
-## 验证记录
+XIAO 配置沿用原工程的 OV3660 和 SDMMC 1-bit 接线，SD 引脚 CLK=7、CMD=9、D0=8。当前网络模块支持 AP，卫星需求中的 STA 配网、重连与其他业务后续实现。
 
-2026-10-26 在 Debian 13 / x86_64 上，使用 Python 3.13.5、ESP-IDF v6.1、Xtensa GCC 15.2.0 完成以下验证：
+## 验证
 
-- Bash 封装命令、Zsh 环境激活和 `idf.py --version` 均正常。
-- `IDF_PY_BUILD_JOBS=4 bash tools/idf.sh build` 完整编译通过，生成应用、bootloader 和分区表。
-- 官方分区校验通过；生成的配置与 ESP32-S3、16MB Flash、80MHz Octal PSRAM 默认值一致。
-- `esptool image-info` 确认应用为 ESP32-S3、16MB / 80MHz / DIO，版本 0.1.0，镜像大小 193,968 字节，校验和及验证哈希有效。
-- GDB 和 OpenOCD 可启动。
+本次拆分执行 ESP-IDF 编译和模块组合检查；无板网页测试：
 
-实际 PSRAM 容量、串口输出、下载及板上运行需要接上开发板后验证。
+```bash
+node --test tests/monitor_ui.test.cjs
+```
 
-## 参考文档
-
-- [ESP-IDF v6.1 Linux / macOS 命令行安装](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/get-started/linux-macos-setup-legacy.html)
-- [ESP32-S3 Flash / PSRAM 配置](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/api-guides/flash_psram_config.html)
-- [ESP-IDF v6.1 发布记录](https://github.com/espressif/esp-idf/releases/tag/v6.1)
+测试覆盖无 SD/无录像的页面、异步摄像头切换、切换失败恢复和无卡拍照预览。摄像头成像、SD 实物接线、供电和舵机动作等待上板验证；未执行烧录。

@@ -13,14 +13,13 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "nvs_flash.h"
+#include "runtime.h"
 
 static const char *TAG = "beidou";
 
 void app_main(void)
 {
-    // Preserve stored configuration on NVS errors; recovery must be explicit.
-    ESP_ERROR_CHECK(nvs_flash_init());
+    ESP_ERROR_CHECK(runtime_start());
 
     esp_chip_info_t chip;
     esp_chip_info(&chip);

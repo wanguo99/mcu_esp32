@@ -1,8 +1,9 @@
 # ESP-IDF generated files (defaults are tracked)
 /build/
-/sdkconfig
-/sdkconfig.old
-/managed_components/
+sdkconfig
+sdkconfig.old
+managed_components/
+/apps/*/build/
 
 # Machine-specific editor settings
 /.vscode/

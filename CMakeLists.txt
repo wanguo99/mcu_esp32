@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
-
-set(IDF_TARGET "esp32s3" CACHE STRING "Target chip")
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-
-project(beidou_controller VERSION 0.1.0)
+set(MCU_APP satellite)
+set(MCU_APP_DIR "${CMAKE_CURRENT_LIST_DIR}/apps/satellite")
+file(STRINGS "${MCU_APP_DIR}/board.default" MCU_DEFAULT_BOARD LIMIT_COUNT 1)
+set(MCU_DEFAULT_MODULES "")
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/mcu_project.cmake")
+project(beidou_controller VERSION 0.2.0)

@@ -1,0 +1,8 @@
+menu "MCU application configuration"
+config MCU_DEVICE_HOSTNAME
+    string "Device hostname"
+    default "esp32-device"
+config MCU_DEVICE_NAME
+    string "Device display name"
+    default "ESP32 Device"
+endmenu

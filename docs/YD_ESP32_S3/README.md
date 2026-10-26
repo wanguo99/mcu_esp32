@@ -12,7 +12,7 @@
 | N8R8 | 8 MB，Quad SPI | 8 MB，Octal SPI | 资料包中的其他型号 |
 | N16R8 | 16 MB，Quad SPI | 8 MB，Octal SPI | 本项目选型 |
 
-[`sdkconfig.defaults`](../../sdkconfig.defaults) 已按 N16R8 设置：Flash 使用 DIO / 80 MHz，启用 16 MB 容量；PSRAM 使用 Octal / 80 MHz，并在启动时进行内存检查。Quad SPI 描述 Flash 接口能力，当前固件选择的读取模式是 DIO。
+[板卡默认配置](../../boards/YD_ESP32_S3/sdkconfig.defaults) 已按 N16R8 设置：Flash 使用 DIO / 80 MHz，启用 16 MB 容量；PSRAM 使用 Octal / 80 MHz，并在启动时进行内存检查。Quad SPI 描述 Flash 接口能力，当前固件选择的读取模式是 DIO。
 
 天线形式由模组型号决定：**WROOM-1 使用 PCB 天线，WROOM-1U 使用外接天线连接器**。项目需求是外接 2.4 GHz 天线，选板时应核对是否为 WROOM-1U 或具有对应天线连接电路的板型，不能仅凭 N16R8 判断。见 [乐鑫数据手册，第 1.1 节](https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf)。
 

@@ -1,0 +1,21 @@
+#pragma once
+
+#include "sdkconfig.h"
+#define APP_DEVICE_HOSTNAME CONFIG_MCU_DEVICE_HOSTNAME
+#define APP_DEVICE_NAME CONFIG_MCU_DEVICE_NAME
+
+#define APP_SD_MOUNT_POINT "/sdcard"
+#define APP_SD_FILE_LIST_LIMIT 64
+
+#define APP_RECORD_FPS 5
+#define APP_RECORD_NVS_NAMESPACE "recording"
+#define APP_RECORD_NVS_SEGMENT_KEY "segment_min"
+#define APP_RECORD_SEGMENT_MINUTES_DEFAULT 5
+#define APP_RECORD_SEGMENT_MINUTES_MIN 1
+#define APP_RECORD_SEGMENT_MINUTES_MAX 60
+// Keep each AVI below the 32-bit file-offset range used by FatFs/ftell.
+#define APP_RECORD_MAX_FILE_BYTES (1536ULL * 1024ULL * 1024ULL)
+
+#define APP_HTTP_MAX_URI_HANDLERS 20
+#define APP_STREAM_PORT 81
+#define APP_FILE_PORT 82

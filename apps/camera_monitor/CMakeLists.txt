@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22)
+set(MCU_APP camera_monitor)
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/board.default" MCU_DEFAULT_BOARD LIMIT_COUNT 1)
+set(MCU_DEFAULT_MODULES "network;web;camera;storage;recording")
+set(MCU_APP_DIR "${CMAKE_CURRENT_LIST_DIR}")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/mcu_project.cmake")
+project(camera_monitor VERSION 0.2.0)

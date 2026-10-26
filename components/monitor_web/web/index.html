@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>摄像头监控</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="api.js"></script>
+  <script defer src="monitor.js"></script>
+</head>
+<body data-page="monitor">
+  <main>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">LOCAL CAMERA CONSOLE</p>
+        <h1 id="device-name">摄像头监控</h1><a href="/">返回设备首页</a>
+      </div>
+      <div class="connection-status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="status">连接中...</span>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <section class="stream-panel" aria-label="实时画面">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">MONITOR</p>
+            <h2>实时画面</h2>
+          </div>
+          <button id="reconnect" class="button button-subtle" type="button" title="重新连接视频流">
+            <svg class="button-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.9-3M4 5v4h4M4 13a8 8 0 0 0 14.9 3M20 19v-4h-4"/></svg>
+            重连视频
+          </button>
+        </div>
+        <div id="stream-stage" class="stream-stage camera-disabled">
+          <img id="stream" alt="Camera stream">
+          <div id="camera-offline" class="camera-offline">摄像头已关闭</div>
+          <button id="fullscreen" class="icon-button fullscreen-button" type="button"
+                  aria-label="全屏显示" aria-pressed="false" title="全屏显示">
+            <svg class="fullscreen-enter" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+            <svg class="fullscreen-exit" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3v3a2 2 0 0 1-2 2H3M16 3v3a2 2 0 0 0 2 2h3M8 21v-3a2 2 0 0 0-2-2H3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+          </button>
+        </div>
+        <div class="stream-toolbar">
+          <button id="capture" class="button button-primary" type="button">
+            <svg class="button-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h3l1.5-2h7L17 7h3v12H4zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/></svg>
+            拍照
+          </button>
+          <a id="photo-preview" hidden target="_blank" rel="noopener">查看照片</a>
+          <label class="field compact-field">
+            <span>分辨率</span>
+            <select id="size">
+              <option value="6">QVGA</option>
+              <option value="10">VGA</option>
+              <option value="11" selected>SVGA</option>
+              <option value="12">XGA</option>
+              <option value="15">UXGA</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <aside class="control-panel" aria-label="设备控制">
+        <section class="control-section camera-section">
+          <div class="camera-switch-row">
+            <div>
+              <p class="section-kicker">CAMERA</p>
+              <h2>摄像头开关</h2>
+            </div>
+            <label class="switch" title="开启或关闭摄像头">
+              <input id="camera-toggle" type="checkbox" role="switch" aria-label="摄像头开关">
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            </label>
+          </div>
+        </section>
+        <section class="control-section" data-feature="recording" hidden>
+          <div class="panel-heading compact-heading">
+            <div>
+              <p class="section-kicker">RECORDING</p>
+              <h2>录像控制</h2>
+            </div>
+            <span class="control-hint">MJPEG AVI</span>
+          </div>
+          <div class="record-actions">
+            <button id="record-start" class="button button-record" type="button">
+              <svg class="button-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              开始录像
+            </button>
+            <button id="record-stop" class="button button-subtle" type="button">
+              <svg class="button-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg>
+              停止录像
+            </button>
+          </div>
+          <label class="field">
+            <span>分段时长</span>
+            <select id="period">
+              <option value="1">1 分钟</option>
+              <option value="5" selected>5 分钟</option>
+              <option value="10">10 分钟</option>
+              <option value="30">30 分钟</option>
+              <option value="60">60 分钟</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="control-section system-section">
+          <div class="panel-heading compact-heading">
+            <div>
+              <p class="section-kicker">SYSTEM</p>
+              <h2>系统操作</h2>
+            </div>
+          </div>
+          <button data-feature="storage" hidden id="sd-check" class="button button-wide" type="button">
+            <svg class="button-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16v13H4zM7 7V4h10v3M8 12h8M8 16h5"/></svg>
+            检查 SD 卡
+          </button>
+          <button id="reset" class="button button-wide danger-button" type="button">
+            <svg class="button-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 1 4M20 4v7h-7"/></svg>
+            复位 MCU
+          </button>
+        </section>
+      </aside>
+    </div>
+
+    <section data-feature="storage" hidden class="storage-panel" aria-label="SD 卡文件">
+      <div class="panel-heading">
+        <div>
+          <p class="section-kicker">STORAGE</p>
+          <h2>SD 卡文件</h2>
+        </div>
+        <button id="sd-refresh" class="icon-button button-subtle" type="button" title="刷新文件列表" aria-label="刷新文件列表">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.9-3M4 5v4h4M4 13a8 8 0 0 0 14.9 3M20 19v-4h-4"/></svg>
+        </button>
+      </div>
+      <p id="storage-summary" class="storage-summary">正在读取 SD 卡...</p>
+      <div id="file-list" class="file-list" aria-live="polite"></div>
+    </section>
+  </main>
+</body>
+</html>
