@@ -1,0 +1,11 @@
+# ESP-IDF generated files (defaults are tracked)
+/build/
+/sdkconfig
+/sdkconfig.old
+/managed_components/
+
+# Machine-specific editor settings
+/.vscode/
+/.idea/
+__pycache__/
+*.pyc
