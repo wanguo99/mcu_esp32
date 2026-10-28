@@ -1,14 +1,39 @@
-<!doctype html>
-<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>设备控制台</title><style>
-body{font:16px system-ui;max-width:800px;margin:48px auto;padding:0 24px;background:#f3f5f7;color:#20303c}
-section{background:white;border-radius:12px;padding:24px;margin:20px 0}a{color:#1166a8}li{margin:12px 0}
-</style><h1 id="name">设备控制台</h1><section><p id="status">正在连接设备…</p></section>
-<section><h2>功能模块</h2><ul id="pages"></ul><p id="modules"></p></section><script>
-(async()=>{try{const status=await fetch('/api/status').then(r=>r.json());
-document.getElementById('name').textContent=status.name;
-document.getElementById('status').textContent=`${status.board} · ${status.ip} · 运行 ${status.uptime_seconds} 秒`;
-document.getElementById('modules').textContent='已选择：'+Object.entries(status.modules).filter(([,v])=>v).map(([k])=>k).join('、');
-const pages=await fetch('/api/modules').then(r=>r.json());for(const page of pages){const li=document.createElement('li');const a=document.createElement('a');a.textContent=page.name;a.href=page.href;li.append(a);document.getElementById('pages').append(li);}
-}catch(e){document.getElementById('status').textContent='设备状态读取失败';}})();
-</script></html>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#070c15"><title>设备控制台</title><link rel="stylesheet" href="/ui/theme.css"><style>
+.hero{display:grid;grid-template-columns:1.2fr 1fr;gap:30px;align-items:center;padding:30px 0 35px}.hero p{max-width:480px;color:var(--muted)}.orbit{width:100%;height:230px;color:#53e0d3}.module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.module-card{display:block;padding:25px;position:relative;color:var(--text);transition:border-color .2s,transform .2s}.module-card:hover{text-decoration:none;border-color:#4b9da2;transform:translateY(-3px)}.module-card .glyph{font:28px var(--mono);color:var(--cyan);margin-bottom:24px}.module-card p{color:var(--muted);font-size:13px;min-height:42px}.module-card .enter{font-size:12px;color:var(--cyan);display:flex;justify-content:space-between}.system{display:grid;grid-template-columns:1fr 1fr;gap:28px;padding:25px}.data-row{display:flex;justify-content:space-between;gap:15px;border-bottom:1px solid #23334a;padding:9px 0;font-size:12px}.data-row span:first-child{color:var(--muted)}.data-row span:last-child{overflow-wrap:anywhere;text-align:right}.hero .kicker{color:var(--cyan)}@media(max-width:700px){.hero{grid-template-columns:1fr;padding-bottom:24px;gap:0}.orbit{height:170px}.module-grid,.system{grid-template-columns:1fr}.module-card p{min-height:auto}}
+</style></head><body><div class="shell">
+<header class="topbar"><a class="brand" href="/"><span class="brand-mark"><span>✦</span></span><span>设备控制台<small>ESP32 / CONTROL SYSTEM</small></span></a><span class="tag" id="connection" role="status">等待设备响应</span></header>
+<section class="hero"><div><p class="kicker">SYSTEM OVERVIEW / 设备总览</p><h1 id="name">连接你的设备</h1><p>从这里查看运行状态，进入已启用的功能。所有控制与数据传输均在设备本地完成。</p><span class="chip" id="board">等待板卡信息</span><span class="chip" id="version">固件 —</span></div>
+<svg class="orbit" viewBox="0 0 500 250" fill="none" aria-hidden="true"><defs><radialGradient id="glow"><stop stop-color="#53e0d3" stop-opacity=".14"/><stop offset="1" stop-color="#53e0d3" stop-opacity="0"/></radialGradient></defs><circle cx="250" cy="125" r="120" fill="url(#glow)"/><ellipse cx="250" cy="125" rx="210" ry="72" stroke="#29485d" transform="rotate(-20 250 125)"/><ellipse cx="250" cy="125" rx="140" ry="100" stroke="#274457" stroke-dasharray="4 8" transform="rotate(30 250 125)"/><circle cx="250" cy="125" r="72" stroke="#3e7783"/><circle cx="250" cy="125" r="57" stroke="#285060" stroke-dasharray="2 7"/><path d="M230 105h40v40h-40zM230 112h-48v26h48m40-26h48v26h-48M198 112v26m16-26v26m72-26v26m16-26v26M240 103l10-17 10 17" stroke="currentColor" stroke-width="1.5"/><circle cx="250" cy="125" r="8" fill="#53e0d3" fill-opacity=".2" stroke="currentColor"/><circle cx="63" cy="168" r="4" fill="currentColor"/><circle cx="395" cy="62" r="3" fill="#a7b8d0"/><path d="M250 12v16m0 194v16M12 125h16m444 0h16" stroke="#476278"/><text x="352" y="223" fill="#7693ab" font-size="9" font-family="monospace" letter-spacing="2">LOCAL / ONLINE LINK</text></svg></section>
+<div class="metrics"><article class="panel metric"><div class="metric-label">运行时间</div><div class="metric-value" id="uptime">—</div><div class="metric-meta">自本次启动起</div></article><article class="panel metric"><div class="metric-label">可用堆内存</div><div class="metric-value" id="heap">—</div><div class="metric-meta">设备实时报告</div></article><article class="panel metric"><div class="metric-label">已选功能模块</div><div class="metric-value" id="count">—</div><div class="metric-meta">按固件构建组合启用</div></article><article class="panel metric"><div class="metric-label">设备地址</div><div class="metric-value" id="ip" style="font-size:20px">—</div><div class="metric-meta" id="hostname">—</div></article></div>
+<div class="section-head"><div><p class="kicker">WORKSPACES</p><h2>功能工作台</h2></div><p class="note">仅显示设备已注册的控制页面</p></div><div id="pages" class="module-grid"><div class="empty">正在发现可用功能…</div></div>
+<div class="section-head"><div><p class="kicker">DEVICE DETAILS</p><h2>系统信息</h2></div><p class="note" id="updated">尚未同步</p></div><section class="panel system"><div><h3>构建能力</h3><p class="note">模块已编入固件，不代表外设已经接线或启用。</p><div id="modules"></div></div><div><div class="data-row"><span>板卡</span><span id="detail-board">—</span></div><div class="data-row"><span>固件版本</span><span id="detail-version">—</span></div><div class="data-row"><span>连接方式</span><span>设备本地 HTTP</span></div><div class="data-row"><span>最近重启收尾结果</span><span id="restart-error">—</span></div></div></section>
+<div class="banner" id="error" role="alert"></div><footer class="page-footer"><span>MCU ESP32 · 模块化设备控制平台</span><span>LOCAL FIRST / 无需外部资源</span></footer></div>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const labels={network:'网络',web:'网页',servo:'舵机',camera:'摄像头',storage:'存储',recording:'录像',fan:'风扇',relay_uart:'串口继电器',mpu6050:'六轴传感器',ws2812:'RGB 灯效',voltage_sensor:'电压采样',power_monitor:'功率统计',angle_search:'角度寻优'};
+const descriptions={'/satellite/':['◈','卫星控制台','天线与太阳翼调向、能源监测、扫描曲线和运行策略。'],'/camera/':['▣','摄像头监控','实时画面、拍照、录像，以及设备文件管理。'],'/components/':['⌘','外设调试','舵机、风扇、继电器、传感器与灯效的独立调试。']};
+let polling=false;
+async function get(url){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);
+  try{const r=await fetch(url,{signal:controller.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json();}
+  catch(error){if(controller.signal.aborted)throw new Error('请求超时，请检查手机 Wi-Fi 与访问地址');throw error;}
+  finally{clearTimeout(timer);}
+}
+function render(s,pages){
+  $('name').textContent=s.name;$('board').textContent=s.board;$('version').textContent='固件 '+s.firmware_version;
+  $('detail-board').textContent=s.board;$('detail-version').textContent=s.firmware_version;
+  const seconds=Math.max(0,Number(s.uptime_seconds)||0),hours=Math.floor(seconds/3600);
+  $('uptime').textContent=hours+'h '+Math.floor(seconds%3600/60)+'m';$('heap').textContent=Math.round(s.free_heap_bytes/1024)+' KB';
+  $('ip').textContent=s.ip;$('hostname').textContent=s.hostname;
+  const selected=Object.entries(s.modules||{}).filter(([,v])=>v);$('count').textContent=String(selected.length);
+  $('modules').replaceChildren(...selected.map(([key])=>{const e=document.createElement('span');e.className='chip';e.textContent=labels[key]||key;return e;}));
+  const links=pages.filter(p=>typeof p.href==='string'&&p.href.startsWith('/')&&!p.href.startsWith('//')&&!p.href.includes('\\'));
+  $('pages').replaceChildren(...links.map(p=>{const [glyph,title,description]=descriptions[p.href]||['◇',p.name,'打开此设备功能页面。'];const a=document.createElement('a');a.className='panel module-card';a.href=p.href;
+    for(const [tag,cls,text] of [['div','glyph',glyph],['h3','',title],['p','',description],['div','enter','进入工作台 →']]){const e=document.createElement(tag);e.className=cls;e.textContent=text;a.append(e);}return a;}));
+  if(!links.length){const e=document.createElement('div');e.className='empty';e.textContent='当前固件没有注册独立控制页面，已启用模块见下方。';$('pages').append(e);}
+  $('restart-error').textContent=s.restart_error?'错误代码 '+s.restart_error:'无错误';$('updated').textContent='最近同步 '+new Date().toLocaleTimeString();
+}
+async function refresh(){if(polling||document.hidden)return;polling=true;try{const [s,p]=await Promise.all([get('/api/status'),get('/api/modules')]);render(s,p);$('connection').textContent='设备已连接';$('connection').className='tag online';$('error').textContent='';}catch(e){$('connection').textContent='设备连接中断';$('connection').className='tag offline';$('error').textContent='无法刷新设备信息：'+e.message+'。请检查设备网络，页面会自动重试。';$('error').className='banner error';}finally{polling=false;}}
+refresh();setInterval(refresh,4000);
+</script></body></html>

@@ -3,6 +3,7 @@
 #include "settings.h"
 #include "sdkconfig.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
 #if CONFIG_MCU_ENABLE_NETWORK
 #include "wifi_manager.h"
 #endif
@@ -23,8 +24,24 @@
 #endif
 
 static const char *TAG = "runtime";
+static runtime_shutdown_hook_t s_hooks[8];
+static unsigned s_hook_count;
+static portMUX_TYPE s_hook_lock = portMUX_INITIALIZER_UNLOCKED;
 
-esp_err_t runtime_prepare_restart(void)
+esp_err_t runtime_register_shutdown_hook(runtime_shutdown_hook_t hook)
+{
+    if (!hook) return ESP_ERR_INVALID_ARG;
+    portENTER_CRITICAL(&s_hook_lock);
+    for (unsigned i=0; i<s_hook_count; ++i) {
+        if (s_hooks[i] == hook) { portEXIT_CRITICAL(&s_hook_lock); return ESP_OK; }
+    }
+    esp_err_t result = ESP_ERR_NO_MEM;
+    if (s_hook_count < 8) { s_hooks[s_hook_count++] = hook; result = ESP_OK; }
+    portEXIT_CRITICAL(&s_hook_lock);
+    return result;
+}
+
+static esp_err_t prepare_services(void)
 {
 #if CONFIG_MCU_ENABLE_CAMERA && CONFIG_MCU_ENABLE_WEB
     return monitor_web_prepare_restart();
@@ -39,6 +56,20 @@ esp_err_t runtime_prepare_restart(void)
     return ESP_OK;
 #endif
 #endif
+}
+
+esp_err_t runtime_prepare_restart(void)
+{
+    runtime_shutdown_hook_t hooks[8];
+    portENTER_CRITICAL(&s_hook_lock);
+    unsigned count = s_hook_count;
+    for (unsigned i=0; i<count; ++i) hooks[i] = s_hooks[i];
+    portEXIT_CRITICAL(&s_hook_lock);
+    for (unsigned i=0; i<count; ++i) {
+        esp_err_t result = hooks[i]();
+        if (result != ESP_OK) return result;
+    }
+    return prepare_services();
 }
 
 esp_err_t runtime_start(void)

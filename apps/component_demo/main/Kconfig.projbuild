@@ -1,0 +1,154 @@
+menu "Component demo wiring"
+    menuconfig DEMO_SERVO
+        bool "Configure servo"
+        depends on MCU_ENABLE_SERVO
+        default n
+    if DEMO_SERVO
+        config DEMO_SERVO_GPIO
+            int "PWM GPIO"
+            range 0 48
+            default 1
+        config DEMO_SERVO_MIN_US
+            int "Minimum pulse (us), verify servo specification"
+            range 100 5000
+            default 500
+        config DEMO_SERVO_MAX_US
+            int "Maximum pulse (us), verify servo specification"
+            range 100 5000
+            default 2500
+        config DEMO_SERVO_MAX_ANGLE
+            int "Maximum calibrated angle (degrees)"
+            range 1 360
+            default 180
+    endif
+    menuconfig DEMO_FAN
+        bool "Configure fan"
+        depends on MCU_ENABLE_FAN
+        default n
+    if DEMO_FAN
+        config DEMO_FAN_PWM
+            int "PWM GPIO"
+            range 0 48
+            default 2
+        config DEMO_FAN_TACH
+            int "Tach GPIO (-1 for PWM only)"
+            range -1 48
+            default 3
+        config DEMO_FAN_PPR
+            int "Tach pulses per revolution"
+            range 1 32
+            default 2
+        config DEMO_FAN_HZ
+            int "PWM frequency (Hz)"
+            range 1 40000
+            default 25000
+        config DEMO_FAN_INVERTED
+            bool "Invert PWM (external inverting driver)"
+            default n
+    endif
+    menuconfig DEMO_RELAY
+        bool "Configure UART relay"
+        depends on MCU_ENABLE_RELAY_UART
+        default n
+    if DEMO_RELAY
+        config DEMO_RELAY_UART
+            int "UART port (UART0 is the default console)"
+            range 0 2
+            default 1
+        config DEMO_RELAY_TX
+            int "TX GPIO"
+            range 0 48
+            default 4
+        config DEMO_RELAY_RX
+            int "RX GPIO (-1 for fixed frames without replies)"
+            range -1 48
+            default 5
+        config DEMO_RELAY_RTS
+            int "RS485 DE/~RE GPIO (-1 for TTL/full duplex)"
+            range -1 48
+            default -1
+        config DEMO_RELAY_BAUD
+            int "Baud rate"
+            range 1200 1000000
+            default 9600
+        config DEMO_RELAY_PARITY
+            int "Parity: 0=none, 1=odd, 2=even"
+            range 0 2
+            default 0
+        config DEMO_RELAY_TWO_STOP
+            bool "Two stop bits"
+            default n
+        config DEMO_RELAY_FIXED
+            bool "Use fixed hexadecimal frames instead of Modbus coils"
+            default n
+        if DEMO_RELAY_FIXED
+            config DEMO_RELAY_ON_HEX
+                string "ON frame (hex bytes separated by spaces)"
+                default ""
+            config DEMO_RELAY_OFF_HEX
+                string "OFF frame (hex bytes separated by spaces)"
+                default ""
+            config DEMO_RELAY_ACK_ON_HEX
+                string "ON reply (empty for no reply)"
+                default ""
+            config DEMO_RELAY_ACK_OFF_HEX
+                string "OFF reply (empty for no reply)"
+                default ""
+        endif
+        if !DEMO_RELAY_FIXED
+            config DEMO_RELAY_ADDRESS
+                int "Modbus slave address"
+                range 1 247
+                default 1
+            config DEMO_RELAY_CHANNELS
+                int "Channel count"
+                range 1 32
+                default 1
+            config DEMO_RELAY_FIRST_COIL
+                int "First coil address (zero based)"
+                range 0 65535
+                default 0
+        endif
+    endif
+    menuconfig DEMO_IMU
+        bool "Configure MPU6050"
+        depends on MCU_ENABLE_MPU6050
+        default n
+    if DEMO_IMU
+        config DEMO_IMU_PORT
+            int "I2C port (avoid the camera SCCB controller)"
+            range 0 1
+            default 0
+        config DEMO_IMU_SDA
+            int "SDA GPIO"
+            range 0 48
+            default 6
+        config DEMO_IMU_SCL
+            int "SCL GPIO"
+            range 0 48
+            default 7
+        config DEMO_IMU_AD0_HIGH
+            bool "AD0 high (address 0x69)"
+            default n
+        config DEMO_IMU_INTERNAL_PULLUPS
+            bool "Enable weak internal pullups (prefer external pullups)"
+            default n
+    endif
+    menuconfig DEMO_LED
+        bool "Configure WS2812 strip"
+        depends on MCU_ENABLE_WS2812
+        default n
+    if DEMO_LED
+        config DEMO_LED_GPIO
+            int "Data GPIO"
+            range 0 48
+            default 8
+        config DEMO_LED_COUNT
+            int "LED count"
+            range 1 512
+            default 1
+        config DEMO_LED_RGB
+            bool "RGB byte order (default GRB)"
+            default n
+    endif
+endmenu

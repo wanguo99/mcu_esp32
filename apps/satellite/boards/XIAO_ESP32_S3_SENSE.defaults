@@ -1,0 +1,5 @@
+# Antenna/test servo signal is wired to D0 (GPIO1).
+# Creation leaves PWM stopped; the first angle is explicitly set by the user.
+CONFIG_SAT_AXIS0_GPIO=1
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y

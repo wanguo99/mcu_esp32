@@ -1,4 +1,5 @@
 #pragma once
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
@@ -8,6 +9,7 @@ typedef esp_err_t (*web_shutdown_callback_t)(void);
 esp_err_t web_server_start(web_shutdown_callback_t shutdown);
 esp_err_t web_server_stop(void);
 httpd_handle_t web_server_handle(void);
+bool web_server_is_restarting(void);
 esp_err_t web_server_register_page(const char *name, const char *href);
 void web_set_common_headers(httpd_req_t *req);
 esp_err_t web_send_asset(httpd_req_t *req, const uint8_t *start, const uint8_t *end, const char *content_type);

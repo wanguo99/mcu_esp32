@@ -1,1 +1,5 @@
-idf_component_register(SRCS "servo.c" INCLUDE_DIRS "include" REQUIRES board app_config esp_driver_ledc esp_driver_gpio)
+set(servo_requires peripheral_resources esp_driver_ledc esp_driver_gpio esp_timer)
+if(IDF_TARGET STREQUAL "esp32")
+    list(APPEND servo_requires esp_driver_mcpwm)
+endif()
+idf_component_register(SRCS "servo.c" INCLUDE_DIRS "include" REQUIRES ${servo_requires})

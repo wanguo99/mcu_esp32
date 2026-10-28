@@ -11,4 +11,12 @@ config CAM_WIFI_AP_PASSWORD
         Leave empty for an open access point, or configure an 8 to 63
         character password to enable WPA2-PSK for production deployments.
 
+config MCU_WIFI_STA_SSID
+    string "Optional station SSID (empty keeps AP only)"
+    default ""
+config MCU_WIFI_STA_PASSWORD
+    string "Station password"
+    default ""
+    help
+        Stored in the compiled firmware. Do not commit private sdkconfig files.
 endmenu

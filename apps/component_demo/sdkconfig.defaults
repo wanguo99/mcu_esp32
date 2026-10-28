@@ -1,0 +1,2 @@
+CONFIG_MCU_DEVICE_HOSTNAME="esp32-components"
+CONFIG_MCU_DEVICE_NAME="ESP32 Component Console"

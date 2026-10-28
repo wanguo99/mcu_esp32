@@ -1,0 +1,6 @@
+set(console_assets "")
+if(CONFIG_MCU_ENABLE_WEB)
+    list(APPEND console_assets "console.html")
+endif()
+idf_component_register(SRCS "app_main.c" "console.c" "console_input.c" INCLUDE_DIRS "." REQUIRES runtime app_config esp_timer EMBED_FILES ${console_assets})
+idf_component_optional_requires(PRIVATE web servo fan relay_uart mpu6050 ws2812)

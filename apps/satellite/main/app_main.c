@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "esp_app_desc.h"
+#include "board.h"
 #include "esp_chip_info.h"
 #include "esp_err.h"
 #include "esp_flash.h"
@@ -14,6 +15,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "runtime.h"
+#include "satellite.h"
+#include "sdkconfig.h"
+esp_err_t satellite_console_start(void);
+#if CONFIG_MCU_ENABLE_WEB
+esp_err_t satellite_web_start(void);
+#endif
 
 static const char *TAG = "beidou";
 
@@ -30,16 +37,17 @@ void app_main(void)
     const esp_app_desc_t *app = esp_app_get_description();
     ESP_LOGI(TAG, "%s v%s, ESP-IDF %s", app->project_name, app->version,
              app->idf_ver);
-    ESP_LOGI(TAG, "ESP32-S3: %d cores, revision %d", chip.cores, chip.revision);
+    ESP_LOGI(TAG, "%s: %d cores, revision %u.%u", board_get_config()->name,
+             chip.cores, chip.revision / 100, chip.revision % 100);
+    size_t psram_size = 0;
+#if CONFIG_SPIRAM
+    psram_size = esp_psram_get_size();
+#endif
     ESP_LOGI(TAG, "Flash: %" PRIu32 " MB, PSRAM: %zu MB",
-             flash_size / (1024 * 1024), esp_psram_get_size() / (1024 * 1024));
-    ESP_LOGI(TAG, "NVS ready. Servo outputs are not configured.");
-
-    while (true) {
-        ESP_LOGI(TAG, "uptime=%" PRId64 "s, free_internal=%zu, free_psram=%zu",
-                 esp_timer_get_time() / 1000000,
-                 heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-                 heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
+             flash_size / (1024 * 1024), psram_size / (1024 * 1024));
+    ESP_ERROR_CHECK(satellite_start());
+    ESP_ERROR_CHECK(satellite_console_start());
+#if CONFIG_MCU_ENABLE_WEB
+    ESP_ERROR_CHECK(satellite_web_start());
+#endif
 }

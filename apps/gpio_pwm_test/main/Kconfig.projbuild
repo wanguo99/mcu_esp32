@@ -1,0 +1,75 @@
+menu "GPIO PWM test"
+choice GPIO_PWM_TEST_MODE
+    prompt "Test mode"
+    default GPIO_PWM_TEST_MULTI_PIN
+
+config GPIO_PWM_TEST_MULTI_PIN
+    bool "Multiple GPIOs with 50% square wave"
+
+config GPIO_PWM_TEST_LEVEL_TOGGLE
+    bool "GPIO13 LOW/HIGH every second (temporary wiring test, no PWM)"
+    depends on IDF_TARGET_ESP32
+    default n
+    help
+        Drive only GPIO13 low for one second and high for one second.
+        Disconnect actuator signal wires; use a DC voltmeter to identify the pin.
+
+config GPIO_PWM_TEST_SERVO_SWEEP
+    bool "Servo angle sweep on selected GPIOs"
+    depends on IDF_TARGET_ESP32
+    help
+        Drive the selected GPIOs with 50 Hz PWM, using 500 to 2500 us pulses.
+        Repeat the selected target angles with a configurable hold time.
+endchoice
+
+config GPIO_PWM_TEST_SERVO_GPIO
+    int "First servo GPIO"
+    depends on GPIO_PWM_TEST_SERVO_SWEEP
+    range 0 33
+    default 13
+
+config GPIO_PWM_TEST_SERVO_CYCLES
+    int "Number of angle cycles before stopping PWM (0 repeats forever)"
+    depends on GPIO_PWM_TEST_SERVO_SWEEP
+    range 0 1000
+    default 0
+
+config GPIO_PWM_TEST_SERVO_TWO_ANGLES
+    bool "Alternate only 45 and 135 degrees"
+    depends on GPIO_PWM_TEST_SERVO_SWEEP
+    default n
+
+config GPIO_PWM_TEST_SERVO_HOLD_MS
+    int "Hold time per target angle (ms)"
+    depends on GPIO_PWM_TEST_SERVO_SWEEP
+    range 200 60000
+    default 1000
+
+config GPIO_PWM_TEST_SECOND_SERVO
+    bool "Test a second servo with a separate PWM channel"
+    depends on GPIO_PWM_TEST_SERVO_SWEEP
+    default n
+    help
+        Both channels use 50 Hz PWM and repeat the same selected angles
+        and hold time. GPIO13 and GPIO14 are the default pins.
+
+config GPIO_PWM_TEST_SECOND_SERVO_GPIO
+    int "Second servo GPIO"
+    depends on GPIO_PWM_TEST_SECOND_SERVO
+    range 0 33
+    default 14
+
+config GPIO_PWM_TEST_FREQUENCY
+    int "Square-wave frequency (Hz)"
+    depends on GPIO_PWM_TEST_MULTI_PIN
+    range 1 20000
+    default 1000
+
+config GPIO_PWM_TEST_INCLUDE_GPIO16_17
+    bool "Also test GPIO16/17 (only on ESP32 modules without PSRAM)"
+    depends on IDF_TARGET_ESP32 && GPIO_PWM_TEST_MULTI_PIN
+    default n
+    help
+        GPIO16/17 are used by PSRAM on ESP32-WROVER modules. Enable only
+        after confirming these pins are free on the actual module.
+endmenu

@@ -25,6 +25,11 @@ extern const uint8_t home_end[] asm("_binary_web_home_html_end");
 static esp_err_t home_handler(httpd_req_t *req)
 { return web_send_asset(req, home_start, home_end, "text/html; charset=utf-8"); }
 
+extern const uint8_t theme_start[] asm("_binary_ui_theme_css_start");
+extern const uint8_t theme_end[] asm("_binary_ui_theme_css_end");
+static esp_err_t theme_handler(httpd_req_t *req)
+{ return web_send_asset(req,theme_start,theme_end,"text/css; charset=utf-8"); }
+
 static esp_err_t favicon_handler(httpd_req_t *req)
 {
     web_set_common_headers(req);
@@ -85,6 +90,27 @@ static esp_err_t status_handler(httpd_req_t *req)
 #ifdef CONFIG_MCU_ENABLE_SERVO
     cJSON_AddBoolToObject(modules, "servo", true);
 #endif
+#ifdef CONFIG_MCU_ENABLE_FAN
+    cJSON_AddBoolToObject(modules, "fan", true);
+#endif
+#ifdef CONFIG_MCU_ENABLE_RELAY_UART
+    cJSON_AddBoolToObject(modules, "relay_uart", true);
+#endif
+#ifdef CONFIG_MCU_ENABLE_MPU6050
+    cJSON_AddBoolToObject(modules, "mpu6050", true);
+#endif
+#ifdef CONFIG_MCU_ENABLE_WS2812
+    cJSON_AddBoolToObject(modules, "ws2812", true);
+#endif
+#ifdef CONFIG_MCU_ENABLE_VOLTAGE_SENSOR
+    cJSON_AddBoolToObject(modules, "voltage_sensor", true);
+#endif
+#ifdef CONFIG_MCU_ENABLE_POWER_MONITOR
+    cJSON_AddBoolToObject(modules, "power_monitor", true);
+#endif
+#ifdef CONFIG_MCU_ENABLE_ANGLE_SEARCH
+    cJSON_AddBoolToObject(modules, "angle_search", true);
+#endif
     return web_send_json(req, status);
 }
 
@@ -126,6 +152,7 @@ esp_err_t web_server_start(web_shutdown_callback_t shutdown)
     if (result != ESP_OK) return result;
     const httpd_uri_t routes[] = {
         {.uri="/", .method=HTTP_GET, .handler=home_handler},
+        {.uri="/ui/theme.css", .method=HTTP_GET, .handler=theme_handler},
         {.uri="/favicon.ico", .method=HTTP_GET, .handler=favicon_handler},
         {.uri="/api/status", .method=HTTP_GET, .handler=status_handler},
         {.uri="/api/modules", .method=HTTP_GET, .handler=modules_handler},
@@ -153,6 +180,7 @@ esp_err_t web_server_stop(void)
 }
 
 httpd_handle_t web_server_handle(void) { return s_server; }
+bool web_server_is_restarting(void) { return atomic_load(&s_restarting); }
 
 esp_err_t web_server_register_page(const char *name, const char *href)
 {

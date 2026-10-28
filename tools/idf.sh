@@ -29,7 +29,7 @@ fi
 source "$mcu_root/tools/export.sh"
 mcu_build="$mcu_root/build/$mcu_app/$mcu_board"
 if "$mcu_modules_set" && [ "$mcu_modules" != defaults ]; then
-    if [[ ! "$mcu_modules" =~ ^[a-z_,\;]*$ ]]; then
+    if [[ ! "$mcu_modules" =~ ^[a-z0-9_,\;]*$ ]]; then
         echo "Invalid module list: $mcu_modules" >&2; exit 2
     fi
     mcu_variant="${mcu_modules//[,;]/_}"

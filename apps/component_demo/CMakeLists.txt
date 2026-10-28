@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22)
+set(MCU_APP component_demo)
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/board.default" MCU_DEFAULT_BOARD LIMIT_COUNT 1)
+set(MCU_DEFAULT_MODULES "network;web;servo;fan;relay_uart;mpu6050;ws2812")
+set(MCU_APP_DIR "${CMAKE_CURRENT_LIST_DIR}")
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/mcu_project.cmake")
+project(component_demo VERSION 0.3.0)

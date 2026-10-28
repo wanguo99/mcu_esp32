@@ -1,0 +1,378 @@
+menu "Satellite hardware and policies"
+config SAT_SERVO_AUTO_RELEASE_MS
+    int "Release servo PWM after idle target hold (ms, 0 keeps PWM enabled)"
+    range 0 600000
+    default 1000
+    help
+        After the final angle command, keep its PWM for this settling time, then
+        drive the signal low. Smooth moves finish before this hold starts.
+        This is a timed release, not feedback that the shaft reached its target.
+        Released servos do not provide powered holding torque.
+
+menu "Antenna"
+config SAT_AXIS0_GPIO
+    int "PWM GPIO (-1 disables)"
+    range -1 48
+    default -1
+
+config SAT_AXIS0_REVERSED
+    bool "Reverse antenna rotation direction"
+    default n
+
+config SAT_AXIS0_MAX
+    int "Calibrated maximum degrees"
+    range 1 360
+    default 180
+
+config SAT_AXIS0_MIN_US
+    int "Minimum calibrated pulse us"
+    range 100 5000
+    default 500
+
+config SAT_AXIS0_MAX_US
+    int "Maximum calibrated pulse us"
+    range 100 5000
+    default 2500
+
+endmenu
+menu "Left solar wing"
+config SAT_AXIS1_GPIO
+    int "PWM GPIO (-1 disables)"
+    range -1 48
+    default -1
+
+config SAT_AXIS1_REVERSED
+    bool "Reverse left solar wing rotation direction"
+    default n
+
+config SAT_AXIS1_MAX
+    int "Calibrated maximum degrees"
+    range 1 360
+    default 180
+
+config SAT_AXIS1_MIN_US
+    int "Minimum calibrated pulse us"
+    range 100 5000
+    default 500
+
+config SAT_AXIS1_MAX_US
+    int "Maximum calibrated pulse us"
+    range 100 5000
+    default 2500
+
+endmenu
+menu "Right solar wing"
+config SAT_AXIS2_GPIO
+    int "PWM GPIO (-1 disables)"
+    range -1 48
+    default -1
+
+config SAT_AXIS2_REVERSED
+    bool "Reverse right solar wing rotation direction"
+    default n
+
+config SAT_AXIS2_MAX
+    int "Calibrated maximum degrees"
+    range 1 360
+    default 180
+
+config SAT_AXIS2_MIN_US
+    int "Minimum calibrated pulse us"
+    range 100 5000
+    default 500
+
+config SAT_AXIS2_MAX_US
+    int "Maximum calibrated pulse us"
+    range 100 5000
+    default 2500
+
+endmenu
+menu "Left solar measurement"
+config SAT_MON0_V_GPIO
+    int "Voltage divider ADC1 GPIO (-1 disables)"
+    range -1 10
+    default -1
+
+config SAT_MON0_V_UPPER
+    int "Divider upper resistance ohm"
+    range 0 10000000
+    default 30000
+
+config SAT_MON0_V_LOWER
+    int "Divider lower resistance ohm"
+    range 1 10000000
+    default 10000
+
+config SAT_MON0_I_GPIO
+    int "Analog current sensor output ADC1 GPIO (-1 disables)"
+    range -1 10
+    default -1
+
+config SAT_MON0_I_UPPER
+    int "Divider upper resistance ohm"
+    range 0 10000000
+    default 0
+
+config SAT_MON0_I_LOWER
+    int "Divider lower resistance ohm"
+    range 1 10000000
+    default 10000
+
+config SAT_MON0_ZERO_MV
+    int "Current sensor output at zero current (mV)"
+    range 0 30000
+    default 0
+
+config SAT_MON0_MV_PER_A
+    int "Current sensor sensitivity (mV/A)"
+    range 1 100000
+    default 1000
+
+endmenu
+menu "Right solar measurement"
+config SAT_MON1_V_GPIO
+    int "Voltage divider ADC1 GPIO (-1 disables)"
+    range -1 10
+    default -1
+
+config SAT_MON1_V_UPPER
+    int "Divider upper resistance ohm"
+    range 0 10000000
+    default 30000
+
+config SAT_MON1_V_LOWER
+    int "Divider lower resistance ohm"
+    range 1 10000000
+    default 10000
+
+config SAT_MON1_I_GPIO
+    int "Analog current sensor output ADC1 GPIO (-1 disables)"
+    range -1 10
+    default -1
+
+config SAT_MON1_I_UPPER
+    int "Divider upper resistance ohm"
+    range 0 10000000
+    default 0
+
+config SAT_MON1_I_LOWER
+    int "Divider lower resistance ohm"
+    range 1 10000000
+    default 10000
+
+config SAT_MON1_ZERO_MV
+    int "Current sensor output at zero current (mV)"
+    range 0 30000
+    default 0
+
+config SAT_MON1_MV_PER_A
+    int "Current sensor sensitivity (mV/A)"
+    range 1 100000
+    default 1000
+
+endmenu
+menu "Battery measurement"
+config SAT_MON2_V_GPIO
+    int "Voltage divider ADC1 GPIO (-1 disables)"
+    range -1 10
+    default -1
+
+config SAT_MON2_V_UPPER
+    int "Divider upper resistance ohm"
+    range 0 10000000
+    default 30000
+
+config SAT_MON2_V_LOWER
+    int "Divider lower resistance ohm"
+    range 1 10000000
+    default 10000
+
+config SAT_MON2_I_GPIO
+    int "Analog current sensor output ADC1 GPIO (-1 disables)"
+    range -1 10
+    default -1
+
+config SAT_MON2_I_UPPER
+    int "Divider upper resistance ohm"
+    range 0 10000000
+    default 0
+
+config SAT_MON2_I_LOWER
+    int "Divider lower resistance ohm"
+    range 1 10000000
+    default 10000
+
+config SAT_MON2_ZERO_MV
+    int "Current sensor output at zero current (mV)"
+    range 0 30000
+    default 0
+
+config SAT_MON2_MV_PER_A
+    int "Current sensor sensitivity (mV/A)"
+    range 1 100000
+    default 1000
+
+endmenu
+menu "External supply measurement"
+config SAT_MON3_V_GPIO
+    int "Voltage divider ADC1 GPIO (-1 disables)"
+    range -1 10
+    default -1
+
+config SAT_MON3_V_UPPER
+    int "Divider upper resistance ohm"
+    range 0 10000000
+    default 30000
+
+config SAT_MON3_V_LOWER
+    int "Divider lower resistance ohm"
+    range 1 10000000
+    default 10000
+
+config SAT_MON3_I_GPIO
+    int "Analog current sensor output ADC1 GPIO (-1 disables)"
+    range -1 10
+    default -1
+
+config SAT_MON3_I_UPPER
+    int "Divider upper resistance ohm"
+    range 0 10000000
+    default 0
+
+config SAT_MON3_I_LOWER
+    int "Divider lower resistance ohm"
+    range 1 10000000
+    default 10000
+
+config SAT_MON3_ZERO_MV
+    int "Current sensor output at zero current (mV)"
+    range 0 30000
+    default 0
+
+config SAT_MON3_MV_PER_A
+    int "Current sensor sensitivity (mV/A)"
+    range 1 100000
+    default 1000
+
+endmenu
+config SAT_BAT_LOW_MV
+    int "Battery low threshold (verify battery chemistry)"
+    range 100 60000
+    default 3300
+
+config SAT_BAT_RECOVER_MV
+    int "Battery recovery threshold"
+    range 100 60000
+    default 3600
+
+config SAT_SOLAR_MIN_MW
+    int "Minimum useful solar power; weaker light pauses search"
+    range 0 100000
+    default 10
+
+config SAT_SEARCH_SETTLE_MS
+    int "Settle after movement before measurements"
+    range 100 5000
+    default 500
+
+config SAT_AUTO_INTERVAL_S
+    int "Interval between completed automatic scans"
+    range 10 86400
+    default 300
+
+config SAT_IMU_SDA
+    int "MPU6050 SDA (-1 disables)"
+    range -1 48
+    default -1
+
+config SAT_IMU_SCL
+    int "MPU6050 SCL (-1 disables)"
+    range -1 48
+    default -1
+
+config SAT_IMU_PORT
+    int "MPU6050 I2C controller"
+    range 0 1
+    default 0
+
+config SAT_TILT_LIMIT_DEG
+    int "Maximum tilt from configured gravity direction"
+    range 5 85
+    default 45
+
+config SAT_GRAVITY_X_MG
+    int "Expected stable gravity direction X (mg)"
+    range -1000 1000
+    default 0
+
+config SAT_GRAVITY_Y_MG
+    int "Expected stable gravity direction Y (mg)"
+    range -1000 1000
+    default 0
+
+config SAT_GRAVITY_Z_MG
+    int "Expected stable gravity direction Z (mg)"
+    range -1000 1000
+    default 1000
+
+config SAT_SHOCK_MG
+    int "Acceleration magnitude triggering automatic-motion fault"
+    range 1100 8000
+    default 2500
+
+config SAT_LED_GPIO
+    int "Status WS2812 data GPIO (-1 disables)"
+    range -1 48
+    default -1
+
+config SAT_LED_COUNT
+    int "Status LED count"
+    range 1 512
+    default 1
+
+config SAT_FAN_GPIO
+    int "Fan PWM GPIO (-1 disables)"
+    range -1 48
+    default -1
+
+config SAT_FAN_TACH
+    int "Fan tach GPIO (-1 disables)"
+    range -1 48
+    default -1
+
+config SAT_RELAY_TX
+    int "Modbus UART1 relay TX (-1 disables)"
+    range -1 48
+    default -1
+
+config SAT_RELAY_RX
+    int "Modbus UART1 relay RX"
+    range -1 48
+    default -1
+
+config SAT_RELAY_RTS
+    int "RS485 direction pin (-1 for TTL)"
+    range -1 48
+    default -1
+
+config SAT_RELAY_BAUD
+    int "Relay baud rate"
+    range 1200 1000000
+    default 9600
+
+config SAT_RELAY_ADDR
+    int "Relay Modbus address"
+    range 1 247
+    default 1
+
+config SAT_RELAY_CHANNELS
+    int "Relay channels"
+    range 1 32
+    default 1
+
+config SAT_RELAY_FIRST_COIL
+    int "Relay first coil"
+    range 0 65535
+    default 0
+
+endmenu

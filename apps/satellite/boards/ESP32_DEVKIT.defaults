@@ -1,0 +1,11 @@
+# WROOM-32 CH340 board: left solar wing on D25, right solar wing on D26.
+# Mirrored mounting: reverse the left wing; keep the right wing normal.
+# Radar/antenna PWM is temporarily disabled; D14 is not driven.
+# UART0 stays on GPIO1/3.
+CONFIG_SAT_AXIS0_GPIO=-1
+CONFIG_SAT_AXIS0_REVERSED=y
+CONFIG_SAT_AXIS1_GPIO=25
+CONFIG_SAT_AXIS1_REVERSED=y
+CONFIG_SAT_AXIS2_GPIO=26
+CONFIG_SAT_AXIS2_REVERSED=n
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y

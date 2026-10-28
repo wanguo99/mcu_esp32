@@ -1,5 +1,6 @@
 # ESP-IDF generated files (defaults are tracked)
 /build/
+/logs/
 sdkconfig
 sdkconfig.old
 managed_components/
@@ -10,3 +11,10 @@ managed_components/
 /.idea/
 __pycache__/
 *.pyc
+
+# Local Wi-Fi credentials
+/docs/passwd.dfts
+
+# Third-party installers bundled with board reference materials
+/docs/**/*.exe
+/docs/**/*.apk
