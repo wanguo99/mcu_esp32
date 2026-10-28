@@ -11,6 +11,8 @@ typedef struct {
     bool ap_active;
     char ssid[33];
     char ip[16];
+    bool sta_connected,sta_static_ip;
+    char sta_ip[16],sta_netmask[16],sta_gateway[16];
 } wifi_manager_status_t;
 
 esp_err_t wifi_manager_init(void);
@@ -22,6 +24,7 @@ typedef struct {
     int rssi_dbm;
     uint8_t bssid[6];
     uint8_t channel;
+    char ssid[33];
     int64_t timestamp_us;
 } wifi_signal_sample_t;
 esp_err_t wifi_manager_get_signal(wifi_signal_sample_t *sample);

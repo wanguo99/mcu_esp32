@@ -131,6 +131,45 @@ test('auto-released solar wing keeps movement and home controls without automati
   assert.equal(await page.locator('[data-axis="1"][data-action="set"]').isDisabled(),false);
  }finally{await page.close();}
 });
+test('solar voltage search needs no current and displays voltage peak and angle',async()=>{
+ state.power[0].power_w=null;state.power[0].current_a=null;
+ state.axes[1]={...state.axes[1],angle:null,output_enabled:false,auto_released:false,best_angle:74,best_voltage_v:6,best_score:6};
+ const page=await pageAt();try{
+  assert.equal(await page.locator('#best-voltage-1').innerText(),'6.000 V');
+  assert.equal(await page.locator('#best-angle-1').innerText(),'74.0°');
+  const scan=page.locator('[data-axis="1"][data-action="scan"]');
+  await page.locator('details').nth(1).evaluate(e=>{e.open=true;});
+  assert.equal(await scan.isDisabled(),false);await scan.click();
+  await page.waitForFunction(()=>document.getElementById('message').textContent.includes('设备已接受'));
+  assert.equal(posts.at(-1).searchParams.get('action'),'scan');
+  await page.locator('#trace-axis').selectOption('1');
+  assert.match(await page.locator('#trace-unit').innerText(),/电压 \/ V/);
+  state.power[0].voltage_v=null;await sync(page);
+  assert.equal(await scan.isDisabled(),true);
+ }finally{await page.close();}
+});
+test('parallel wings share channel zero and disallow overlapping searches',async()=>{
+ state.power[1].voltage_v=null;state.power[1].power_w=null;
+ state.solar_active_axis=1;state.solar_pending_right=true;state.solar_automatic=true;
+ state.axes[1].mode=state.axes[2].mode=1;
+ const page=await pageAt();try{
+  assert.equal(await page.locator('#solar').innerText(),'5.240');
+  assert.match(await page.locator('#solar-mode').innerText(),/扫描左翼/);
+  assert.equal(await page.locator('#axis-state-2').innerText(),'等待左翼完成');
+  for(const i of [1,2])for(const action of ['scan','auto'])
+   assert.equal(await page.locator(`[data-axis="${i}"][data-action="${action}"]`).isDisabled(),true);
+  state.solar_active_axis=0;state.solar_pending_right=false;state.solar_automatic=false;await sync(page);
+  assert.equal(await page.locator('[data-axis="2"][data-action="auto"]').isDisabled(),false);
+  await page.locator('details').nth(2).evaluate(e=>{e.open=true;});
+  await page.locator('[data-axis="2"][data-action="auto"]').click();
+  await page.waitForFunction(()=>document.getElementById('message').textContent.includes('双翼低压自动寻优：设备已接受'));
+  assert.equal(posts.at(-1).searchParams.get('axis'),'2');
+  assert.equal(posts.at(-1).searchParams.get('action'),'auto');
+  state.power[0].voltage_v=null;state.power[1].voltage_v=8;await sync(page);
+  assert.equal(await page.locator('#solar').innerText(),'—');
+  assert.equal(await page.locator('[data-axis="2"][data-action="auto"]').isDisabled(),true);
+ }finally{await page.close();}
+});
 test('satellite initializes with GET only, preserves edits and sends fractional relative movement',async()=>{
  const page=await pageAt();try{
   assert.equal(posts.length,0);await page.locator('#slider-0').focus();await page.keyboard.press('ArrowRight');
@@ -138,6 +177,53 @@ test('satellite initializes with GET only, preserves edits and sends fractional 
   await btn(page,'by').click();await page.waitForFunction(()=>document.getElementById('message').textContent.includes('设备已接受'));
   assert.equal(posts.length,1);assert.equal(posts[0].searchParams.get('value'),'-12.5');assert.equal(posts[0].searchParams.get('action'),'by');
   assert.equal(await page.locator('#delta-0').inputValue(),'-12.5');
+ }finally{await page.close();}
+});
+test('antenna manual and automatic modes display real RSSI and block manual movement until switched',async()=>{
+ state.axes[0]={...state.axes[0],angle:null,output_enabled:false};
+ Object.assign(state,{wifi_ssid:'test-router',wifi_channel:6,wifi_samples:5,rssi_mean_dbm:-55.2,rssi_min_dbm:-60,rssi_max_dbm:-50,antenna_low_dbm:-75});
+ const page=await pageAt();try{
+  assert.equal(await page.locator('#rssi').innerText(),'-54');
+  assert.match(await page.locator('#rssi-note').innerText(),/test-router.*6/);
+  assert.match(await page.locator('#rssi-stats').innerText(),/-55.2 dBm/);
+  assert.equal(await btn(page,'manual').getAttribute('aria-pressed'),'true');
+  assert.equal(await btn(page,'auto').isDisabled(),false); // No initial angle required.
+  assert.equal(posts.length,0);
+  await btn(page,'auto').click();
+  await page.waitForFunction(()=>document.getElementById('message').textContent.includes('设备已接受'));
+  assert.equal(posts.at(-1).searchParams.get('action'),'auto');
+  Object.assign(state.axes[0],{mode:1,search_phase:5,best_angle:110,best_rssi_dbm:-30});
+  await sync(page);
+  assert.equal(await btn(page,'set').isDisabled(),true);
+  assert.equal(await btn(page,'auto').isDisabled(),true);
+  assert.equal(await btn(page,'auto').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('#best-rssi-0').innerText(),'-30.0 dBm');
+  assert.equal(await page.locator('#best-angle-0').innerText(),'110.0°');
+  await btn(page,'manual').click();
+  await page.waitForFunction(()=>document.getElementById('message').textContent.includes('手动控制：设备已接受'));
+  assert.equal(posts.at(-1).searchParams.get('action'),'manual');
+  state.axes[0].mode=0;state.axes[0].search_phase=0;state.rssi_dbm=null;await sync(page);
+  assert.equal(await btn(page,'set').isDisabled(),false); // PWM test needs no radio link.
+  assert.equal(await btn(page,'auto').isDisabled(),true);
+ }finally{await page.close();}
+});
+test('solar mode switches control both wings and manual PWM needs no voltage sensor',async()=>{
+ state.solar_automatic=true;state.solar_active_axis=1;state.axes[1].mode=state.axes[2].mode=1;
+ const page=await pageAt();try{
+  for(const i of [1,2]){
+   assert.equal(await page.locator(`[data-axis="${i}"][data-action="set"]`).isDisabled(),true);
+   assert.equal(await page.locator(`[data-axis="${i}"][data-action="auto"]`).getAttribute('aria-pressed'),'true');
+  }
+  await page.locator('[data-axis="2"][data-action="manual"]').click();
+  await page.waitForFunction(()=>document.getElementById('message').textContent.includes('手动控制：设备已接受'));
+  assert.equal(posts.at(-1).searchParams.get('axis'),'2');assert.equal(posts.at(-1).searchParams.get('action'),'manual');
+  state.solar_automatic=false;state.solar_active_axis=0;state.axes[1].mode=state.axes[2].mode=0;
+  state.power[0].voltage_v=null;await sync(page);
+  for(const i of [1,2]){
+   assert.equal(await page.locator(`[data-axis="${i}"][data-action="set"]`).isDisabled(),false);
+   assert.equal(await page.locator(`[data-axis="${i}"][data-action="auto"]`).isDisabled(),true);
+  }
+  assert.equal(await page.locator('#solar').innerText(),'—');
  }finally{await page.close();}
 });
 test('unconfigured and policy-blocked axes reject movement while stop bypasses unrelated validation',async()=>{
@@ -170,7 +256,7 @@ test('scan data is read on demand, exports CSV, clears old series when switching
  }finally{await page.close();}
 });
 test('null measurements remain unavailable and reset requires a saved home',async()=>{
- state.rssi_dbm=null;state.power[0].power_w=null;state.power[0].session_energy_wh=0;state.axes[0].home=null;
+ state.rssi_dbm=null;state.power[0].voltage_v=null;state.power[1].voltage_v=null;state.power[0].power_w=null;state.power[0].session_energy_wh=0;state.axes[0].home=null;
  const page=await pageAt();try{
   assert.equal(await page.locator('#rssi').innerText(),'—');assert.equal(await page.locator('#solar').innerText(),'—');assert.equal(await page.locator('#energy-0').innerText(),'—');
   assert.equal(await btn(page,'home').isDisabled(),true);assert.equal(await btn(page,'auto').isDisabled(),true);

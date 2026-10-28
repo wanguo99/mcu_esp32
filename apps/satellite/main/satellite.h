@@ -31,9 +31,18 @@ typedef struct {
     satellite_axis_status_t axis[SATELLITE_AXES];
     power_monitor_t power[SATELLITE_MONITORS];
     esp_err_t voltage_error[SATELLITE_MONITORS],current_error[SATELLITE_MONITORS];
+    bool solar_automatic,solar_boot_pending,solar_pending_right;
+    unsigned solar_active_axis; // 0 idle, 1 left, 2 right; shared voltage channel 0.
     bool standby,battery_configured,low_battery,power_unknown,pose_fault;
     bool wifi_connected,imu_valid;
     int rssi_dbm;
+    float rssi_mean_dbm;
+    int rssi_min_dbm,rssi_max_dbm;
+    unsigned wifi_samples;
+    uint8_t wifi_channel;
+    char wifi_ssid[33];
+    int64_t wifi_sample_us;
+    esp_err_t wifi_error;
     uint8_t bssid[6];
     float tilt_deg,accel_m_s2[3],gyro_dps[3],temperature_c;
     int64_t sample_us;

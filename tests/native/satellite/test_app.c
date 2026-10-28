@@ -3,10 +3,13 @@
 #include <assert.h>
 #include <stdlib.h>
 static int64_t clock_us=1000000;
-static bool voltage_fail;
-static float battery=4.0f;
+static bool voltage_fail,solar_curve,solar_fail;
+static float battery=4.0f,solar_override=-1;
 static uint8_t ap=1;
 static bool connected=true;
+static bool wifi_curve;
+static int rssi=-50;
+static int64_t wifi_stamp;
 struct servo_instance { servo_status_t status; };
 static struct servo_instance fake_servo[3];
 static unsigned created;
@@ -40,11 +43,17 @@ esp_err_t voltage_sensor_create(const voltage_sensor_config_t *c,voltage_sensor_
 esp_err_t voltage_sensor_read(voltage_sensor_handle_t s,voltage_sensor_sample_t *out) {
     if(voltage_fail) return ESP_ERR_TIMEOUT;
     int gpio=(int)(uintptr_t)s-1;
-    *out=(voltage_sensor_sample_t){.voltage_v=gpio==3?battery:gpio>=4?0.1f:5,.timestamp_us=clock_us}; return ESP_OK;
+    if(solar_fail && gpio==1) return ESP_ERR_TIMEOUT;
+    float a=fake_servo[1].status.commanded_angle,b=fake_servo[2].status.commanded_angle;
+    float solar=solar_curve?6.0f-(a-74)*(a-74)*0.0001f-(b-112)*(b-112)*0.0001f:5;
+    if(solar_override>=0) solar=solar_override;
+    *out=(voltage_sensor_sample_t){.voltage_v=gpio==3?battery:gpio>=4?0.1f:solar,.timestamp_us=clock_us}; return ESP_OK;
 }
 esp_err_t wifi_manager_get_signal(wifi_signal_sample_t *out) {
     if(!connected) return ESP_ERR_INVALID_STATE;
-    *out=(wifi_signal_sample_t){.connected=true,.rssi_dbm=-50,.bssid={ap},.timestamp_us=clock_us}; return ESP_OK;
+    int measured=wifi_curve?-30-(int)fabsf(fake_servo[0].status.commanded_angle-110)/2:rssi;
+    *out=(wifi_signal_sample_t){.connected=true,.rssi_dbm=measured,.bssid={ap},.channel=6,.ssid="test-router",
+        .timestamp_us=wifi_stamp?wifi_stamp:clock_us}; return ESP_OK;
 }
 static void setup(void) {
     s_lock=xSemaphoreCreateMutex(); initialize(); sample(clock_us);
@@ -102,7 +111,7 @@ static void once(void) {
     clock_us+=1000000000; control(clock_us); assert(!fake_servo[0].status.moving);
     s_current[0]=NULL; clock_us+=1000000; sample(clock_us);
     assert(s_status.power[0].voltage_valid && !s_status.power[0].power_valid);
-    assert(satellite_axis_command(1,"auto",0,1000)==ESP_ERR_INVALID_STATE);
+    assert(satellite_axis_command(1,"auto",0,1000)==ESP_OK);
 }
 static void unified_angle(void) {
     servo_status_t *s=&fake_servo[1].status;
@@ -119,10 +128,179 @@ static void unified_angle(void) {
     s->last_error=ESP_FAIL;
     assert(satellite_axis_command(1,"angle",60,500)==ESP_OK && s->last_error==ESP_OK);
 }
+static void step_wings(void) {
+    for(unsigned i=1;i<=2;i++) {
+        fake_servo[i].status.commanded_angle=fake_servo[i].status.target_angle;
+        fake_servo[i].status.moving=false;
+    }
+    clock_us+=1000000; sample(clock_us); control(clock_us);
+    assert(!(fake_servo[1].status.moving && fake_servo[2].status.moving));
+}
+static void finish_solar(void) {
+    for(unsigned n=0;n<1000 && s_solar.active_axis;n++) step_wings();
+    assert(!s_solar.active_axis);
+}
+static void voltage_search(void) {
+    s_current[0]=s_current[1]=NULL; s_voltage[1]=NULL; solar_curve=true;
+    clock_us+=1000000; sample(clock_us);
+    assert(!s_status.power[0].power_valid && s_status.power[0].voltage_valid);
+    assert(!s_status.power[1].voltage_valid);
+    assert(satellite_axis_command(1,"scan",0,1000)==ESP_OK);
+    finish_solar();
+    assert(s_axes[1].search.phase==ANGLE_SEARCH_DONE);
+    assert(fabsf(s_status.axis[1].best_angle-74)<0.01f);
+    assert(fabsf(s_status.axis[1].best_score-5.7296f)<0.001f);
+    assert(fake_servo[1].status.commanded_angle==74 && fake_servo[2].status.commanded_angle==60);
+    // Auto from either wing starts the same left-then-right sequence.
+    assert(satellite_axis_command(2,"auto",0,1000)==ESP_OK);
+    assert(s_solar.active_axis==1 && s_solar.pending_right);
+    assert(satellite_axis_command(2,"scan",0,1000)==ESP_ERR_INVALID_STATE);
+    while(s_solar.active_axis==1) {
+        assert(fake_servo[2].status.commanded_angle==60);
+        step_wings();
+    }
+    assert(s_solar.active_axis==2 && fake_servo[1].status.commanded_angle==74);
+    finish_solar();
+    assert(fake_servo[1].status.commanded_angle==74 && fake_servo[2].status.commanded_angle==112);
+    assert(fabsf(s_status.axis[2].best_score-6)<0.001f);
+    assert(s_status.axis[1].error==ESP_OK && s_status.axis[2].error==ESP_OK);
+    assert(s_solar.automatic);
+    step_wings(); // Recovery voltage rearms only after both scans complete.
+    solar_override=3.5f;
+    for(unsigned n=0;n<3;n++) { step_wings(); assert(!s_solar.active_axis); }
+    for(unsigned n=0;n<10;n++) control(clock_us);
+    assert(!s_solar.active_axis); // No restart inside cooldown.
+    clock_us=s_solar.next_search_us-1; sample(clock_us); control(clock_us);
+    assert(!s_solar.active_axis);
+    clock_us+=1; sample(clock_us); control(clock_us);
+    assert(s_solar.active_axis==1);
+    finish_solar();
+    clock_us+=1000000000; sample(clock_us); control(clock_us);
+    assert(!s_solar.active_axis); // Constant low voltage never loops.
+    solar_override=4.6f; step_wings();
+    solar_override=3.5f;
+    for(unsigned n=0;n<3;n++) step_wings();
+    assert(s_solar.active_axis==1);
+    solar_fail=true; step_wings();
+    assert(!s_solar.automatic && !s_solar.active_axis && !s_solar.pending_right);
+    assert(s_status.axis[1].mode==SAT_MODE_MANUAL && s_status.axis[2].mode==SAT_MODE_MANUAL);
+    assert(!fake_servo[1].status.moving && !fake_servo[2].status.moving);
+    assert(s_status.axis[1].error==ESP_ERR_INVALID_RESPONSE);
+    assert(satellite_axis_command(1,"auto",0,1000)==ESP_ERR_INVALID_STATE);
+}
+static void boot_scan(void) {
+    s_lock=xSemaphoreCreateMutex(); initialize(); s_voltage[1]=NULL;
+    assert(s_solar.boot_pending && s_status.axis[1].mode==SAT_MODE_AUTO && s_status.axis[2].mode==SAT_MODE_AUTO);
+    solar_fail=true; sample(clock_us); control(clock_us);
+    assert(!fake_servo[1].status.output_enabled && !fake_servo[2].status.output_enabled && s_solar.boot_pending);
+    solar_fail=false; step_wings();
+    assert(!s_solar.boot_pending && s_solar.active_axis==1);
+    assert(fake_servo[1].status.output_enabled && fake_servo[1].status.commanded_angle==0);
+    assert(!fake_servo[2].status.output_enabled);
+    assert(satellite_axis_command(2,"angle",90,1000)==ESP_OK);
+    assert(!s_solar.active_axis && !s_solar.automatic && !s_solar.pending_right);
+    clock_us+=1000000000; sample(clock_us); control(clock_us);
+    assert(s_status.axis[1].mode==SAT_MODE_MANUAL && s_status.axis[2].mode==SAT_MODE_MANUAL);
+    assert(!angle_search_active(&s_axes[1].search));
+}
+static void shared_cancel(void) {
+    assert(satellite_axis_command(1,"auto",0,1000)==ESP_OK);
+    control(clock_us); assert(fake_servo[1].status.moving);
+    assert(satellite_axis_command(2,"stop",0,1000)==ESP_OK);
+    assert(!s_solar.active_axis && !s_solar.automatic);
+    assert(!fake_servo[1].status.output_enabled && !fake_servo[2].status.output_enabled);
+    assert(satellite_axis_command(1,"auto",0,1000)==ESP_OK);
+    assert(satellite_command("standby",0,0)==ESP_OK);
+    assert(!s_solar.active_axis && !s_solar.automatic);
+    assert(satellite_command("resume",0,0)==ESP_OK);
+    step_wings(); assert(!s_solar.active_axis);
+    assert(satellite_axis_command(2,"scan",0,1000)==ESP_OK);
+    assert(s_solar.active_axis==2 && !s_solar.pending_right);
+    finish_solar(); assert(!s_solar.automatic);
+}
+static void step_antenna(void) {
+    fake_servo[0].status.commanded_angle=fake_servo[0].status.target_angle;
+    fake_servo[0].status.moving=false;
+    clock_us+=1000000; sample(clock_us); control(clock_us);
+}
+static void finish_antenna(void) {
+    for(unsigned n=0;n<500 && angle_search_active(&s_axes[0].search);n++) step_antenna();
+    assert(s_axes[0].search.phase==ANGLE_SEARCH_DONE);
+}
+static void antenna_search(void) {
+    wifi_curve=true;
+    // Auto can bootstrap a servo that has never received an angle, just like solar.
+    fake_servo[0].status.output_enabled=fake_servo[0].status.angle_known=false;
+    assert(satellite_axis_command(0,"auto",0,0)==ESP_OK);
+    assert(satellite_axis_command(0,"scan",0,0)==ESP_ERR_INVALID_STATE);
+    finish_antenna();
+    assert(s_status.axis[0].mode==SAT_MODE_AUTO && s_status.axis[0].best_valid);
+    assert(s_status.axis[0].best_angle==110 && s_status.axis[0].best_score==-30);
+    assert(fake_servo[0].status.commanded_angle==110);
+    assert(fake_servo[1].status.commanded_angle==60 && fake_servo[2].status.commanded_angle==60);
+    step_antenna(); // Strong signal rearms triggering.
+    clock_us+=1000000000; step_antenna();
+    assert(!angle_search_active(&s_axes[0].search)); // No periodic rescan.
+    wifi_curve=false;rssi=-80;
+    step_antenna();step_antenna();assert(!angle_search_active(&s_axes[0].search));
+    for(unsigned i=0;i<20;i++) control(clock_us); // Never count one sample repeatedly.
+    assert(!angle_search_active(&s_axes[0].search));
+    step_antenna();assert(angle_search_active(&s_axes[0].search));
+    finish_antenna();
+    clock_us+=1000000000;step_antenna();assert(!angle_search_active(&s_axes[0].search));
+    rssi=-60;step_antenna();rssi=-80;
+    for(unsigned i=0;i<3;i++) step_antenna();
+    assert(angle_search_active(&s_axes[0].search));
+    assert(satellite_axis_command(0,"manual",0,0)==ESP_OK);
+    step_antenna();assert(!angle_search_active(&s_axes[0].search) && s_status.axis[0].mode==SAT_MODE_MANUAL);
+    assert(satellite_axis_command(0,"angle",45,0)==ESP_OK);
+}
+static void antenna_faults(void) {
+    assert(satellite_axis_command(0,"auto",0,0)==ESP_OK);control(clock_us);
+    connected=false;step_antenna();
+    assert(s_status.axis[0].mode==SAT_MODE_MANUAL && !fake_servo[0].status.moving);
+    assert(s_status.wifi_samples==0 && !s_status.wifi_connected);
+    connected=true;step_antenna();assert(s_status.axis[0].mode==SAT_MODE_MANUAL);
+    assert(satellite_axis_command(0,"auto",0,0)==ESP_OK);control(clock_us);
+    clock_us+=4000000;control(clock_us); // Task cannot use an old radio sample to move.
+    assert(s_status.axis[0].mode==SAT_MODE_MANUAL && !fake_servo[0].status.moving);
+    assert(satellite_axis_command(0,"auto",0,0)==ESP_ERR_INVALID_STATE);
+    sample(clock_us);
+    assert(satellite_axis_command(0,"auto",0,0)==ESP_OK);
+    finish_antenna();
+    rssi=-60;step_antenna();rssi=-80;
+    for(unsigned i=0;i<3;i++) step_antenna();
+    assert(!angle_search_active(&s_axes[0].search)); // Cooldown measured from completion.
+    clock_us=s_axes[0].next_search_us;sample(clock_us);control(clock_us);
+    assert(angle_search_active(&s_axes[0].search));
+}
+static void signal_stats(void) {
+    const int values[]={-80,-60,-70,-40,-50};
+    for(unsigned i=0;i<5;i++) { rssi=values[i];clock_us+=1000000;sample(clock_us); }
+    assert(s_status.wifi_samples==5 && s_status.rssi_mean_dbm==-60);
+    assert(s_status.rssi_min_dbm==-80 && s_status.rssi_max_dbm==-40);
+    assert(s_status.wifi_channel==6 && !strcmp(s_status.wifi_ssid,"test-router"));
+    wifi_stamp=clock_us;rssi=-20;clock_us+=1000000;sample(clock_us);
+    assert(s_status.rssi_mean_dbm==-60); // Repeated acquisition timestamp is not a new sample.
+    wifi_stamp=0;ap=2;clock_us+=1000000;sample(clock_us);
+    assert(s_status.wifi_samples==1 && s_status.rssi_mean_dbm==-20);
+    wifi_stamp=clock_us-4000000;sample(clock_us);
+    assert(!s_status.wifi_connected && s_status.wifi_error==ESP_ERR_INVALID_RESPONSE);
+    wifi_stamp=clock_us+1000000;sample(clock_us);assert(!s_status.wifi_connected);
+    wifi_stamp=0;rssi=1;sample(clock_us);assert(!s_status.wifi_connected);
+    rssi=-50;sample(clock_us);assert(s_status.wifi_samples==1);
+}
 int main(int argc,char **argv) {
-    assert(argc==2); setup();
+    assert(argc==2);
+    if(!strcmp(argv[1],"boot")) { boot_scan(); return 0; }
+    setup();
     if(!strcmp(argv[1],"ownership"))ownership(); else if(!strcmp(argv[1],"policy"))policy();
     else if(!strcmp(argv[1],"standby"))bssid_and_standby();
     else if(!strcmp(argv[1],"once"))once();
+    else if(!strcmp(argv[1],"voltage"))voltage_search();
+    else if(!strcmp(argv[1],"shared_cancel"))shared_cancel();
+    else if(!strcmp(argv[1],"antenna"))antenna_search();
+    else if(!strcmp(argv[1],"antenna_faults"))antenna_faults();
+    else if(!strcmp(argv[1],"signal"))signal_stats();
     else if(!strcmp(argv[1],"angle"))unified_angle(); else assert(0);
 }

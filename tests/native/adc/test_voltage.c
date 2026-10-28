@@ -32,6 +32,11 @@ esp_err_t adc_cali_create_scheme_curve_fitting(const adc_cali_curve_fitting_conf
 }
 esp_err_t adc_cali_delete_scheme_curve_fitting(adc_cali_handle_t c) { free(c); calibrations--; return ESP_OK; }
 esp_err_t adc_cali_raw_to_voltage(adc_cali_handle_t c,int raw,int *mv) { assert(c); *mv=raw; return ESP_OK; }
+esp_err_t adc_cali_create_scheme_line_fitting(const adc_cali_line_fitting_config_t *c,adc_cali_handle_t *out) {
+    assert(c->default_vref==0 && c->unit_id==ADC_UNIT_1);
+    return adc_cali_create_scheme_curve_fitting(NULL,out);
+}
+esp_err_t adc_cali_delete_scheme_line_fitting(adc_cali_handle_t c) { return adc_cali_delete_scheme_curve_fitting(c); }
 static void sharing(void) {
     voltage_sensor_handle_t a,b,duplicate;
     voltage_sensor_config_t c=VOLTAGE_SENSOR_CONFIG_DEFAULT(1);

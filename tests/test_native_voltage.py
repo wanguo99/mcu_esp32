@@ -14,9 +14,12 @@ class VoltageTests(unittest.TestCase):
                    "boards/XIAO_ESP32_S3_SENSE/include"]
         sources = ["tests/native/rtos/rtos.c", "components/voltage_sensor/voltage_sensor.c",
                    "components/peripheral_resources/peripheral_resources.c", "tests/native/adc/test_voltage.c"]
-        subprocess.run(["cc", "-std=gnu11", "-pthread", "-Wall", "-Wextra", "-Werror", *[f"-I{ROOT / p}" for p in include],
+        subprocess.run(["cc", "-std=gnu11", "-pthread", "-Wall", "-Wextra", "-Werror", *(["-DADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED=0"] if getattr(cls,"line_fitting",False) else []), *[f"-I{ROOT / p}" for p in include],
                         *[str(ROOT / p) for p in sources], "-lm", "-o", str(cls.binary)], check=True)
     @classmethod
     def tearDownClass(cls): cls.temp.cleanup()
     def test_shared_adc_unit_and_independent_channels(self): subprocess.run([str(self.binary),"sharing"], check=True, timeout=5)
     def test_calibration_failure_saturation_and_retry(self): subprocess.run([str(self.binary),"faults"], check=True, timeout=5)
+
+class VoltageLineFittingTests(VoltageTests):
+    line_fitting = True

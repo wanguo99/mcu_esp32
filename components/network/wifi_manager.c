@@ -16,6 +16,7 @@ static const char *TAG = "wifi_manager";
 
 static SemaphoreHandle_t s_lock;
 static esp_netif_t *s_ap_netif;
+static esp_netif_t *s_sta_netif;
 static esp_event_handler_instance_t s_wifi_event_instance;
 static wifi_manager_status_t s_status;
 static esp_timer_handle_t s_reconnect_timer;
@@ -97,6 +98,34 @@ static esp_err_t configure_access_point(void)
     return ESP_OK;
 }
 
+static esp_err_t configure_station_ip(esp_netif_t *sta)
+{
+#if CONFIG_MCU_WIFI_STA_STATIC_IP
+    if(CONFIG_MCU_WIFI_STA_STATIC_SSID[0] && strcmp(CONFIG_MCU_WIFI_STA_STATIC_SSID,CONFIG_MCU_WIFI_STA_SSID))
+        return ESP_OK;
+    esp_netif_ip_info_t ip={0};
+    esp_netif_dns_info_t dns={.ip.type=ESP_IPADDR_TYPE_V4};
+    ESP_RETURN_ON_ERROR(esp_netif_str_to_ip4(CONFIG_MCU_WIFI_STA_IP,&ip.ip),TAG,"Invalid station IPv4");
+    ESP_RETURN_ON_ERROR(esp_netif_str_to_ip4(CONFIG_MCU_WIFI_STA_NETMASK,&ip.netmask),TAG,"Invalid station netmask");
+    ESP_RETURN_ON_ERROR(esp_netif_str_to_ip4(CONFIG_MCU_WIFI_STA_GATEWAY,&ip.gw),TAG,"Invalid station gateway");
+    ESP_RETURN_ON_ERROR(esp_netif_str_to_ip4(CONFIG_MCU_WIFI_STA_DNS,&dns.ip.u_addr.ip4),TAG,"Invalid station DNS");
+    ESP_RETURN_ON_FALSE(ip.ip.addr && ip.ip.addr!=UINT32_MAX && ip.netmask.addr && ip.gw.addr &&
+        (ip.ip.addr&ip.netmask.addr)==(ip.gw.addr&ip.netmask.addr) &&
+        (ip.ip.addr&~ip.netmask.addr) && (ip.ip.addr&~ip.netmask.addr)!=~ip.netmask.addr &&
+        dns.ip.u_addr.ip4.addr && dns.ip.u_addr.ip4.addr!=UINT32_MAX,
+        ESP_ERR_INVALID_ARG,TAG,"Invalid static IPv4 subnet or host address");
+    esp_err_t err=esp_netif_dhcpc_stop(sta);
+    if(err!=ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) ESP_RETURN_ON_ERROR(err,TAG,"Stop station DHCP failed");
+    ESP_RETURN_ON_ERROR(esp_netif_set_ip_info(sta,&ip),TAG,"Set station IPv4 failed");
+    ESP_RETURN_ON_ERROR(esp_netif_set_dns_info(sta,ESP_NETIF_DNS_MAIN,&dns),TAG,"Set station DNS failed");
+    ESP_LOGI(TAG,"Station static IPv4: ip=%s mask=%s gateway=%s DNS=%s (DHCP disabled)",
+        CONFIG_MCU_WIFI_STA_IP,CONFIG_MCU_WIFI_STA_NETMASK,CONFIG_MCU_WIFI_STA_GATEWAY,CONFIG_MCU_WIFI_STA_DNS);
+#else
+    (void)sta;
+#endif
+    return ESP_OK;
+}
+
 esp_err_t wifi_manager_init(void)
 {
     if (s_lock) {
@@ -141,9 +170,10 @@ esp_err_t wifi_manager_init(void)
     ESP_RETURN_ON_ERROR(configure_access_point(), TAG, "Configure access point failed");
     if (station_configured()) {
         if (strlen(CONFIG_MCU_WIFI_STA_SSID)>32 || strlen(CONFIG_MCU_WIFI_STA_PASSWORD)>63) return ESP_ERR_INVALID_ARG;
-        esp_netif_t *sta=esp_netif_create_default_wifi_sta();
-        if (!sta) return ESP_ERR_NO_MEM;
-        esp_netif_set_hostname(sta,APP_DEVICE_HOSTNAME);
+        s_sta_netif=esp_netif_create_default_wifi_sta();
+        if (!s_sta_netif) return ESP_ERR_NO_MEM;
+        esp_netif_set_hostname(s_sta_netif,APP_DEVICE_HOSTNAME);
+        ESP_RETURN_ON_ERROR(configure_station_ip(s_sta_netif),TAG,"Configure station IPv4 failed");
         wifi_config_t station={0};
         memcpy(station.sta.ssid,CONFIG_MCU_WIFI_STA_SSID,strlen(CONFIG_MCU_WIFI_STA_SSID));
         memcpy(station.sta.password,CONFIG_MCU_WIFI_STA_PASSWORD,strlen(CONFIG_MCU_WIFI_STA_PASSWORD));
@@ -179,6 +209,16 @@ void wifi_manager_get_status(wifi_manager_status_t *status)
         ip_info.ip.addr != 0) {
         esp_ip4addr_ntoa(&ip_info.ip, status->ip, sizeof(status->ip));
     }
+    wifi_ap_record_t ap;
+    if(s_sta_netif && esp_wifi_sta_get_ap_info(&ap)==ESP_OK && esp_netif_is_netif_up(s_sta_netif) &&
+       esp_netif_get_ip_info(s_sta_netif,&ip_info)==ESP_OK && ip_info.ip.addr) {
+        status->sta_connected=true;
+        esp_ip4addr_ntoa(&ip_info.ip,status->sta_ip,sizeof(status->sta_ip));
+        esp_ip4addr_ntoa(&ip_info.netmask,status->sta_netmask,sizeof(status->sta_netmask));
+        esp_ip4addr_ntoa(&ip_info.gw,status->sta_gateway,sizeof(status->sta_gateway));
+        esp_netif_dhcp_status_t dhcp;
+        status->sta_static_ip=esp_netif_dhcpc_get_status(s_sta_netif,&dhcp)==ESP_OK && dhcp==ESP_NETIF_DHCP_STOPPED;
+    }
 }
 
 esp_err_t wifi_manager_get_signal(wifi_signal_sample_t *out)
@@ -190,6 +230,7 @@ esp_err_t wifi_manager_get_signal(wifi_signal_sample_t *out)
     esp_err_t err=esp_wifi_sta_get_ap_info(&ap);
     if (err!=ESP_OK) return err;
     out->connected=true; out->rssi_dbm=ap.rssi; out->channel=ap.primary;
+    memcpy(out->ssid,ap.ssid,32); out->ssid[32]='\0';
     memcpy(out->bssid,ap.bssid,6); out->timestamp_us=esp_timer_get_time();
     return ESP_OK;
 }

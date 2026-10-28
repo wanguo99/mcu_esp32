@@ -24,10 +24,30 @@ static void number(cJSON *o,const char *key,bool valid,double value) {
 static esp_err_t status_handler(httpd_req_t *req) {
     satellite_status_t s; satellite_get_status(&s);
     cJSON *root=cJSON_CreateObject(); if(!root) return httpd_resp_send_500(req);
+    cJSON_AddBoolToObject(root,"solar_automatic",s.solar_automatic);
+    cJSON_AddBoolToObject(root,"solar_boot_pending",s.solar_boot_pending);
+    cJSON_AddNumberToObject(root,"solar_active_axis",s.solar_active_axis);
+    cJSON_AddBoolToObject(root,"solar_pending_right",s.solar_pending_right);
+    cJSON_AddNumberToObject(root,"solar_voltage_channel",0);
     cJSON_AddBoolToObject(root,"standby",s.standby);
     cJSON_AddBoolToObject(root,"low_battery",s.low_battery); cJSON_AddBoolToObject(root,"power_unknown",s.power_unknown);
     cJSON_AddBoolToObject(root,"pose_fault",s.pose_fault); cJSON_AddNumberToObject(root,"sample_us",s.sample_us);
     number(root,"rssi_dbm",s.wifi_connected,s.rssi_dbm);
+    cJSON_AddBoolToObject(root,"wifi_connected",s.wifi_connected);
+    cJSON_AddStringToObject(root,"wifi_ssid",s.wifi_ssid);
+    cJSON_AddStringToObject(root,"wifi_error",esp_err_to_name(s.wifi_error));
+    char bssid[18]; snprintf(bssid,sizeof(bssid),"%02x:%02x:%02x:%02x:%02x:%02x",s.bssid[0],s.bssid[1],s.bssid[2],s.bssid[3],s.bssid[4],s.bssid[5]);
+    if(s.wifi_connected) cJSON_AddStringToObject(root,"wifi_bssid",bssid); else cJSON_AddNullToObject(root,"wifi_bssid");
+    number(root,"wifi_channel",s.wifi_connected,s.wifi_channel);
+    number(root,"wifi_sample_us",s.wifi_connected,s.wifi_sample_us);
+    cJSON_AddNumberToObject(root,"wifi_samples",s.wifi_samples);
+    number(root,"rssi_mean_dbm",s.wifi_connected && s.wifi_samples,s.rssi_mean_dbm);
+    number(root,"rssi_min_dbm",s.wifi_connected && s.wifi_samples,s.rssi_min_dbm);
+    number(root,"rssi_max_dbm",s.wifi_connected && s.wifi_samples,s.rssi_max_dbm);
+    cJSON_AddNumberToObject(root,"antenna_low_dbm",CONFIG_SAT_ANTENNA_LOW_DBM);
+    cJSON_AddNumberToObject(root,"antenna_recover_dbm",CONFIG_SAT_ANTENNA_RECOVER_DBM);
+    cJSON_AddNumberToObject(root,"solar_low_v",CONFIG_SAT_SOLAR_LOW_MV/1000.0);
+    cJSON_AddNumberToObject(root,"solar_recover_v",CONFIG_SAT_SOLAR_RECOVER_MV/1000.0);
     cJSON *axes=cJSON_AddArrayToObject(root,"axes"),*power=cJSON_AddArrayToObject(root,"power");
     if(!axes || !power) { cJSON_Delete(root); return httpd_resp_send_500(req); }
     for(unsigned i=0;i<3;i++) {
@@ -41,6 +61,9 @@ static esp_err_t status_handler(httpd_req_t *req) {
         cJSON_AddBoolToObject(o,"auto_released",a->auto_released);
         cJSON_AddNumberToObject(o,"mode",a->mode); cJSON_AddNumberToObject(o,"search_phase",a->search_phase);
         number(o,"best_angle",a->best_valid,a->best_angle); number(o,"best_score",a->best_valid,a->best_score);
+        cJSON_AddStringToObject(o,"score_unit",i?"V":"dBm");
+        number(o,"best_voltage_v",i && a->best_valid,a->best_score);
+        number(o,"best_rssi_dbm",!i && a->best_valid,a->best_score);
         cJSON_AddStringToObject(o,"error",esp_err_to_name(a->error));
     }
     for(unsigned i=0;i<4;i++) {

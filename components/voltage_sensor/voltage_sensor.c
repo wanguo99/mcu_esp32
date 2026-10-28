@@ -48,8 +48,15 @@ esp_err_t voltage_sensor_create(const voltage_sensor_config_t *c, voltage_sensor
         err=adc_oneshot_config_channel(s_unit,channel,&cfg);
     }
     if (err==ESP_OK) {
+#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
         adc_cali_curve_fitting_config_t cfg={.unit_id=ADC_UNIT_1,.chan=channel,.atten=ADC_ATTEN_DB_12,.bitwidth=ADC_BITWIDTH_12};
         err=adc_cali_create_scheme_curve_fitting(&cfg,&s->calibration);
+#elif ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
+        adc_cali_line_fitting_config_t cfg={.unit_id=ADC_UNIT_1,.atten=ADC_ATTEN_DB_12,.bitwidth=ADC_BITWIDTH_12,.default_vref=0};
+        err=adc_cali_create_scheme_line_fitting(&cfg,&s->calibration);
+#else
+        err=ESP_ERR_NOT_SUPPORTED;
+#endif
     }
     if (err==ESP_OK) { ++s_users; *out=s; }
     else if (!s_users && s_unit) { adc_oneshot_del_unit(s_unit); s_unit=NULL; }
@@ -78,7 +85,14 @@ esp_err_t voltage_sensor_read(voltage_sensor_handle_t s, voltage_sensor_sample_t
 }
 esp_err_t voltage_sensor_destroy(voltage_sensor_handle_t s) {
     if (!s) return ESP_ERR_INVALID_ARG;
-    lock(); esp_err_t err=adc_cali_delete_scheme_curve_fitting(s->calibration);
+    lock();
+#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
+    esp_err_t err=adc_cali_delete_scheme_curve_fitting(s->calibration);
+#elif ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
+    esp_err_t err=adc_cali_delete_scheme_line_fitting(s->calibration);
+#else
+    esp_err_t err=ESP_ERR_NOT_SUPPORTED;
+#endif
     if (err==ESP_OK) {
         --s_users;
         if (!s_users) { adc_oneshot_del_unit(s_unit); s_unit=NULL; }

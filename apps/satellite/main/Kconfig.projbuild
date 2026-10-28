@@ -87,9 +87,10 @@ config SAT_AXIS2_MAX_US
     default 2500
 
 endmenu
-menu "Left solar measurement"
+menu "Shared solar input (all panels in parallel)"
 config SAT_MON0_V_GPIO
     int "Voltage divider ADC1 GPIO (-1 disables)"
+    range -1 39 if IDF_TARGET_ESP32
     range -1 10
     default -1
 
@@ -105,6 +106,7 @@ config SAT_MON0_V_LOWER
 
 config SAT_MON0_I_GPIO
     int "Analog current sensor output ADC1 GPIO (-1 disables)"
+    range -1 39 if IDF_TARGET_ESP32
     range -1 10
     default -1
 
@@ -129,9 +131,10 @@ config SAT_MON0_MV_PER_A
     default 1000
 
 endmenu
-menu "Right solar measurement"
+menu "Auxiliary measurement (not used for solar angle search)"
 config SAT_MON1_V_GPIO
     int "Voltage divider ADC1 GPIO (-1 disables)"
+    range -1 39 if IDF_TARGET_ESP32
     range -1 10
     default -1
 
@@ -147,6 +150,7 @@ config SAT_MON1_V_LOWER
 
 config SAT_MON1_I_GPIO
     int "Analog current sensor output ADC1 GPIO (-1 disables)"
+    range -1 39 if IDF_TARGET_ESP32
     range -1 10
     default -1
 
@@ -174,6 +178,7 @@ endmenu
 menu "Battery measurement"
 config SAT_MON2_V_GPIO
     int "Voltage divider ADC1 GPIO (-1 disables)"
+    range -1 39 if IDF_TARGET_ESP32
     range -1 10
     default -1
 
@@ -189,6 +194,7 @@ config SAT_MON2_V_LOWER
 
 config SAT_MON2_I_GPIO
     int "Analog current sensor output ADC1 GPIO (-1 disables)"
+    range -1 39 if IDF_TARGET_ESP32
     range -1 10
     default -1
 
@@ -216,6 +222,7 @@ endmenu
 menu "External supply measurement"
 config SAT_MON3_V_GPIO
     int "Voltage divider ADC1 GPIO (-1 disables)"
+    range -1 39 if IDF_TARGET_ESP32
     range -1 10
     default -1
 
@@ -231,6 +238,7 @@ config SAT_MON3_V_LOWER
 
 config SAT_MON3_I_GPIO
     int "Analog current sensor output ADC1 GPIO (-1 disables)"
+    range -1 39 if IDF_TARGET_ESP32
     range -1 10
     default -1
 
@@ -265,10 +273,27 @@ config SAT_BAT_RECOVER_MV
     range 100 60000
     default 3600
 
-config SAT_SOLAR_MIN_MW
-    int "Minimum useful solar power; weaker light pauses search"
+config SAT_SOLAR_BOOT_SCAN
+    bool "Scan left then right once after first valid shared solar sample"
+    default y
+
+config SAT_SOLAR_LOW_MV
+    int "Solar voltage triggering a new scan after three low samples (mV)"
     range 0 100000
-    default 10
+    default 4000
+
+config SAT_SOLAR_RECOVER_MV
+    int "Solar recovery voltage to rearm low-voltage triggering (mV)"
+    range 1 100000
+    default 4500
+
+config SAT_SOLAR_COOLDOWN_S
+    int "Minimum interval after a completed solar scan (seconds)"
+    range 10 86400
+    default 300
+    help
+        This is a cooldown, not a periodic scan timer. Persistent low voltage
+        triggers only once until the voltage recovers above the rearm threshold.
 
 config SAT_SEARCH_SETTLE_MS
     int "Settle after movement before measurements"
@@ -276,9 +301,21 @@ config SAT_SEARCH_SETTLE_MS
     default 500
 
 config SAT_AUTO_INTERVAL_S
-    int "Interval between completed automatic scans"
+    int "Minimum interval after a completed antenna automatic scan (seconds)"
     range 10 86400
     default 300
+    help
+        Cooldown for weak-signal triggering, not a periodic scan timer.
+
+config SAT_ANTENNA_LOW_DBM
+    int "Trigger antenna scan below this RSSI (dBm, three samples)"
+    range -126 -1
+    default -75
+
+config SAT_ANTENNA_RECOVER_DBM
+    int "RSSI recovery threshold to rearm scanning (dBm)"
+    range -125 0
+    default -65
 
 config SAT_IMU_SDA
     int "MPU6050 SDA (-1 disables)"

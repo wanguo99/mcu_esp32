@@ -68,6 +68,11 @@ static esp_err_t status_handler(httpd_req_t *req)
     cJSON_AddStringToObject(status, "board", board_get_config()->name);
     cJSON_AddStringToObject(status, "hostname", APP_DEVICE_HOSTNAME ".local");
     cJSON_AddStringToObject(status, "ip", wifi.ip);
+    cJSON_AddBoolToObject(status, "sta_connected", wifi.sta_connected);
+    cJSON_AddBoolToObject(status, "sta_static_ip", wifi.sta_static_ip);
+    cJSON_AddStringToObject(status, "sta_ip", wifi.sta_ip);
+    cJSON_AddStringToObject(status, "sta_netmask", wifi.sta_netmask);
+    cJSON_AddStringToObject(status, "sta_gateway", wifi.sta_gateway);
     cJSON_AddStringToObject(status, "firmware_version", esp_app_get_description()->version);
     cJSON_AddNumberToObject(status, "uptime_seconds", esp_timer_get_time() / 1000000);
     cJSON_AddNumberToObject(status, "free_heap_bytes", esp_get_free_heap_size());
@@ -148,8 +153,16 @@ esp_err_t web_server_start(web_shutdown_callback_t shutdown)
     config.max_uri_handlers = 64;
     config.max_open_sockets = CONFIG_LWIP_MAX_SOCKETS >= 11 ? 8 : CONFIG_LWIP_MAX_SOCKETS - 3;
     config.lru_purge_enable = true;
+    // The HTTP task serves connections serially. An incomplete request or a
+    // client that stops reading must not consume most of a UI polling timeout.
+    config.recv_wait_timeout = 2;
+    config.send_wait_timeout = 2;
+    config.keep_alive_enable = true;
     esp_err_t result = httpd_start(&s_server, &config);
     if (result != ESP_OK) return result;
+    ESP_LOGI("web", "HTTP ready: sockets=%u recv_timeout=%us send_timeout=%us TCP keepalive enabled",
+             (unsigned)config.max_open_sockets, (unsigned)config.recv_wait_timeout,
+             (unsigned)config.send_wait_timeout);
     const httpd_uri_t routes[] = {
         {.uri="/", .method=HTTP_GET, .handler=home_handler},
         {.uri="/ui/theme.css", .method=HTTP_GET, .handler=theme_handler},

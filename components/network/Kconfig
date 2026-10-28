@@ -19,4 +19,33 @@ config MCU_WIFI_STA_PASSWORD
     default ""
     help
         Stored in the compiled firmware. Do not commit private sdkconfig files.
+
+config MCU_WIFI_STA_STATIC_IP
+    bool "Use a static station IPv4 address"
+    default n
+
+if MCU_WIFI_STA_STATIC_IP
+config MCU_WIFI_STA_STATIC_SSID
+    string "Apply static IPv4 only to this SSID (empty applies to configured station)"
+    default ""
+    help
+        A different configured station SSID uses DHCP. This keeps a saved
+        deployment's address from being applied to an unrelated network.
+
+config MCU_WIFI_STA_IP
+    string "Station IPv4 address"
+    default "192.168.1.100"
+
+config MCU_WIFI_STA_NETMASK
+    string "Station subnet mask"
+    default "255.255.255.0"
+
+config MCU_WIFI_STA_GATEWAY
+    string "Station gateway"
+    default "192.168.1.1"
+
+config MCU_WIFI_STA_DNS
+    string "Station main DNS server"
+    default "192.168.1.1"
+endif
 endmenu

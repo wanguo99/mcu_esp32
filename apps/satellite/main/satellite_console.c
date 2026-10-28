@@ -26,15 +26,18 @@ static void status(void) {
     satellite_status_t s;
     if(satellite_get_status(&s)!=ESP_OK) return;
     printf("policy standby=%d low_battery=%d power_unknown=%d pose_fault=%d\n",s.standby,s.low_battery,s.power_unknown,s.pose_fault);
-    if(s.wifi_connected) printf("wifi rssi=%d dBm bssid=%02x:%02x:%02x:%02x:%02x:%02x\n",s.rssi_dbm,s.bssid[0],s.bssid[1],s.bssid[2],s.bssid[3],s.bssid[4],s.bssid[5]);
-    else puts("wifi signal=unavailable (configure station SSID and connect)");
+    if(s.wifi_connected) printf("wifi rssi=%d dBm mean=%.1f min=%d max=%d samples=%u ssid=%s channel=%u bssid=%02x:%02x:%02x:%02x:%02x:%02x sample_us=%lld\n",
+        s.rssi_dbm,s.rssi_mean_dbm,s.rssi_min_dbm,s.rssi_max_dbm,s.wifi_samples,s.wifi_ssid,s.wifi_channel,
+        s.bssid[0],s.bssid[1],s.bssid[2],s.bssid[3],s.bssid[4],s.bssid[5],(long long)s.wifi_sample_us);
+    else printf("wifi signal=unavailable error=%s (configure station SSID and connect)\n",esp_err_to_name(s.wifi_error));
+    printf("solar common_voltage_channel=0 automatic=%d boot_wait=%d active_axis=%u pending_right=%d\n",s.solar_automatic,s.solar_boot_pending,s.solar_active_axis,s.solar_pending_right);
     const char *names[]={"antenna","left","right"};
     for(unsigned i=0;i<3;i++) {
         satellite_axis_status_t *a=&s.axis[i];
-        printf("%s gpio=%d configured=%d ready=%d known=%d PWM=%d auto_released=%d moving=%d angle=%.2f target=%.2f home_known=%d home=%.2f max=%.2f mode=%d search=%d best_valid=%d best_angle=%.2f best_score=%.3f error=%s\n",
-            names[i],a->gpio,a->configured,a->ready,a->angle_known,a->output_enabled,a->auto_released,a->moving,a->angle,a->target,a->home_known,a->home,a->max_angle,a->mode,a->search_phase,a->best_valid,a->best_angle,a->best_score,esp_err_to_name(a->error));
+        printf("%s gpio=%d configured=%d ready=%d known=%d PWM=%d auto_released=%d moving=%d angle=%.2f target=%.2f home_known=%d home=%.2f max=%.2f mode=%d search=%d best_valid=%d best_angle=%.2f best_score=%.3f unit=%s error=%s\n",
+            names[i],a->gpio,a->configured,a->ready,a->angle_known,a->output_enabled,a->auto_released,a->moving,a->angle,a->target,a->home_known,a->home,a->max_angle,a->mode,a->search_phase,a->best_valid,a->best_angle,a->best_score,i?"V":"dBm",esp_err_to_name(a->error));
     }
-    const char *mon[]={"solar_left","solar_right","battery","external"};
+    const char *mon[]={"solar_bus","auxiliary","battery","external"};
     for(unsigned i=0;i<4;i++) {
         power_monitor_t *p=&s.power[i];
         printf("%s ",mon[i]);
@@ -249,7 +252,7 @@ static int command(int argc,char **argv) {
              "sat capturepair antenna|left|right TARGET [DURATION_MS=500, max 1000]\n"
              "capture ends sampling with a brief PWM pause, then restores the target; paired moves stay continuous.\n"
              "sat fan DUTY_PERCENT | led BRIGHTNESS | relay CHANNEL 0|1\n"
-             "set establishes initial command; auto requires measured RSSI or solar power; status angles are commands, not feedback.");
+             "set establishes initial command; auto requires measured RSSI or solar voltage; status angles are commands, not feedback.");
         return 0;
     }
     if(argc==2 && !strcmp(argv[1],"status")) { status(); return 0; }

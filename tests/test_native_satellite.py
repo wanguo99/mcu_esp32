@@ -53,5 +53,15 @@ class SatelliteApplication(unittest.TestCase):
     def test_low_battery_stale_sensor_and_recovery(self): self.case("policy")
     def test_ap_identity_change_and_standby(self): self.case("standby")
 
-    def test_single_scan_trace_and_voltage_only_rejection(self): self.case("once")
+    def test_single_scan_trace_and_voltage_only_support(self): self.case("once")
     def test_unified_angle_initial_release_explicit_stop_and_error_recovery(self): self.case("angle")
+
+    def test_voltage_peak_return_low_trigger_hysteresis_and_sensor_failure(self): self.case("voltage")
+
+    def test_boot_waits_for_valid_voltage_then_scans_and_stop_cancels(self): self.case("boot")
+
+    def test_shared_solar_stop_and_standby_cancel_both_and_single_scan_stays_single(self): self.case("shared_cancel")
+
+    def test_antenna_bootstrap_best_angle_manual_override_and_weak_signal_trigger(self): self.case("antenna")
+    def test_antenna_disconnect_stale_data_and_scan_cooldown(self): self.case("antenna_faults")
+    def test_signal_window_duplicate_samples_ap_change_and_invalid_data(self): self.case("signal")
